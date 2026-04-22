@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ot-mqtt-consumer
+  namespace: ot-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ot-mqtt-consumer
+  template:
+    metadata:
+      labels:
+        app: ot-mqtt-consumer
+    spec:
+      containers:
+        - name: ot-mqtt-consumer
+          image: ghcr.io/davidevaloroso-sys/ot-security:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ot-mqtt-consumer
+  namespace: ot-namespace
+spec:
+  selector:
+    app: ot-mqtt-consumer
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
