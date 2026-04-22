@@ -54,12 +54,12 @@ jobs:
         run: |
           docker push $IMAGE_NAME:${{ github.sha }}
 
-      - name: Install Trivy
+      - name: Install Trivy CLI
         run: |
           sudo apt-get update
           sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.2_Linux-64bit.tar.gz
-          tar zxvf trivy_0.50.2_Linux-64bit.tar.gz
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.52.2/trivy_0.52.2_Linux-64bit.tar.gz
+          tar zxvf trivy_0.52.2_Linux-64bit.tar.gz
           sudo mv trivy /usr/local/bin/trivy
 
       - name: Run Trivy vulnerability scanner
