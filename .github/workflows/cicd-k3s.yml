@@ -46,27 +46,43 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker image
+      - name: Build consumer image
         run: |
           docker build -t $IMAGE_NAME:${{ github.sha }} .
 
-      - name: Push Docker image
+      - name: Build raspi simulator image
+        run: |
+          docker build -f raspi-simulator/Dockerfile -t $IMAGE_NAME:raspi-simulator-${{ github.sha }} ./raspi-simulator
+
+      - name: Push consumer image
         run: |
           docker push $IMAGE_NAME:${{ github.sha }}
+
+      - name: Push raspi simulator image
+        run: |
+          docker push $IMAGE_NAME:raspi-simulator-${{ github.sha }}
 
       - name: Install Trivy CLI
         uses: ankurk91/install-trivy-cli-action@v2
         with:
-          version: 'latest'   # oppure 'v0.64.0' se vuoi fisso
+          version: 'latest'
           cache: true
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner on consumer
         run: |
           trivy image --exit-code 1 \
-                       --severity CRITICAL \
-                       --ignore-unfixed \
-                       --vuln-type os,library \
-                       $IMAGE_NAME:${{ github.sha }}
+          --severity CRITICAL \
+          --ignore-unfixed \
+          --vuln-type os,library \
+          $IMAGE_NAME:${{ github.sha }}
+
+      - name: Run Trivy vulnerability scanner on raspi simulator
+        run: |
+          trivy image --exit-code 1 \
+          --severity CRITICAL \
+          --ignore-unfixed \
+          --vuln-type os,library \
+          $IMAGE_NAME:raspi-simulator-${{ github.sha }}
 
   deploy_k3s:
     runs-on: ubuntu-latest
@@ -85,6 +101,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y kubectl
+
       - name: Install WireGuard
         run: |
           sudo apt-get update
@@ -110,23 +127,34 @@ jobs:
           sudo wg-quick up wg0
           ip addr show wg0
           sudo wg show
-          
+
       - name: Configure kubeconfig
         run: |
           mkdir -p $HOME/.kube
           echo "${{ secrets.K3S_KUBECONFIG }}" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
-      - name: Update deployment image
+      - name: Update consumer deployment image
         run: |
           chmod +x scripts/update_image_tag.sh
           ./scripts/update_image_tag.sh $IMAGE_NAME:${{ github.sha }}
           cat k3s/ot-consumer-deploy.yaml
 
+      - name: Update raspi simulator deployment image
+        run: |
+          yq -i '.spec.template.spec.containers[0].image = env(IMAGE)' k3s/raspi-simulator-deploy.yaml
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:raspi-simulator-${{ github.sha }}
+
       - name: Apply Kubernetes manifests
         run: |
           kubectl apply -f k3s/ot-consumer-deploy.yaml -n ot-namespace
+          kubectl apply -f k3s/raspi-simulator-deploy.yaml -n ot-namespace
 
-      - name: Check rollout status
+      - name: Check rollout status consumer
         run: |
           kubectl rollout status deployment/ot-mqtt-consumer -n ot-namespace --timeout=60s
+
+      - name: Check rollout status raspi simulator
+        run: |
+          kubectl rollout status deployment/raspi-simulator -n ot-namespace --timeout=60s
