@@ -55,12 +55,10 @@ jobs:
           docker push $IMAGE_NAME:${{ github.sha }}
 
       - name: Install Trivy CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget
-          wget https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh
-          chmod +x install.sh
-          sudo ./install.sh
+        uses: ankurk91/install-trivy-cli-action@v2
+        with:
+          version: 'latest'   # oppure 'v0.64.0' se vuoi fisso
+          cache: true
 
       - name: Run Trivy vulnerability scanner
         run: |
