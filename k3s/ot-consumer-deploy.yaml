@@ -19,6 +19,25 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
+          env:
+            - name: MQTT_BROKER
+              value: "192.168.1.XX"
+            - name: MQTT_PORT
+              value: "1883"
+            - name: MQTT_TOPIC
+              value: "lab/#"
+            - name: MQTT_CLIENT_ID
+              value: "ot-mqtt-consumer"
+            - name: MQTT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: username
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: password
 ---
 apiVersion: v1
 kind: Service
