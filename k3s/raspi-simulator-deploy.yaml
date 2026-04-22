@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: raspi-simulator
+  namespace: ot-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: raspi-simulator
+  template:
+    metadata:
+      labels:
+        app: raspi-simulator
+    spec:
+      containers:
+        - name: raspi-simulator
+          image: ghcr.io/davidevaloroso-sys/ot-security:raspi-simulator-latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MQTT_BROKER
+              value: "192.168.1.21"
+            - name: MQTT_PORT
+              value: "1883"
+            - name: MQTT_CLIENT_ID
+              value: "raspi-simulator-1"
+            - name: MQTT_TOPIC_TEMP
+              value: "lab/raspi1/temperature"
+            - name: MQTT_TOPIC_HUM
+              value: "lab/raspi1/humidity"
+            - name: PUBLISH_INTERVAL
+              value: "5"
+            - name: MQTT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: username
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: password
+          resources:
+            requests:
+              cpu: "20m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: raspi-simulator
+  namespace: ot-namespace
+spec:
+  selector:
+    app: raspi-simulator
+  ports:
+    - name: dummy
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
