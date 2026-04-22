@@ -79,6 +79,86 @@ Il master rappresenta il nodo centrale del cluster K3s ed è il punto di riferim
 
 ## 6. Configurazione di rete del master
 La rete del master è stata configurata in modalità statica per garantire stabilità del nodo di controllo e continuità operativa dei servizi cluster. In un laboratorio DevSecOps o OT-oriented, mantenere un endpoint stabile per il control plane è fondamentale per automazioni, collegamento dei nodi, troubleshooting, inventory e futura integrazione con sistemi di raccolta log o monitoraggio.
+VPN WireGuard, Port Mapping, DDNS e integrazione con GitHub Actions
+Per estendere l’accessibilità del laboratorio anche da contesti esterni e supportare workflow di automazione remota, il nodo master K3s ospita anche il servizio WireGuard, esposto direttamente dalla rete domestica tramite port forwarding sul router. In questa configurazione, la porta 51820/UDP viene inoltrata dal router casalingo verso l’indirizzo IP privato del master 192.168.1.21, che rappresenta il punto di terminazione VPN del laboratorio.
+
+Questa scelta consente di mantenere il master come nodo centrale non solo del cluster K3s, ma anche del piano di accesso sicuro all’infrastruttura, semplificando l’interazione remota con il laboratorio e fornendo una base solida per operazioni automatizzate, deploy controllati e collegamenti da pipeline esterne. WireGuard utilizza comunemente la porta 51820/UDP e richiede che il router consenta l’inoltro del traffico in ingresso verso l’host interno corretto.
+
+Architettura della connettività VPN
+L’architettura della connettività remota si basa sui seguenti elementi:
+
+Nodo master K3s: endpoint VPN interno sulla rete locale.
+
+Router casalingo: gestisce il port mapping dalla rete pubblica verso 192.168.1.21.
+
+WireGuard: servizio VPN terminato direttamente sul master.
+
+Duck DNS: risoluzione del nome DNS pubblico verso l’IP dinamico della connessione domestica.
+
+GitHub Actions: workflow remoti che possono utilizzare endpoint, chiavi e parametri VPN tramite secret di repository.
+
+Port forwarding sul router
+Per rendere il servizio WireGuard raggiungibile dall’esterno, il router domestico deve inoltrare il traffico UDP 51820 verso il master del laboratorio. La regola di port mapping è quindi concettualmente la seguente:
+
+text
+WAN UDP 51820  --->  192.168.1.21:51820/UDP
+Questa configurazione permette al nodo master di ricevere i pacchetti WireGuard provenienti da peer esterni, inclusi eventuali client amministrativi o workflow automatizzati che devono interagire in modo sicuro con l’ambiente di laboratorio. In questo modello, il master resta il punto di ingresso controllato per la connettività privata verso il cluster e verso i servizi interni esposti solo tramite VPN.
+
+Risoluzione IP dinamico con Duck DNS
+Poiché il laboratorio è ospitato dietro una connessione domestica con IP pubblico dinamico, la raggiungibilità esterna non può basarsi in modo affidabile su un indirizzo IP statico. Per questo motivo viene utilizzato Duck DNS come meccanismo di Dynamic DNS, così da associare un hostname stabile all’indirizzo IP pubblico aggiornato del laboratorio.
+
+L’aggiornamento del record Duck DNS viene gestito sul master tramite uno script richiamato periodicamente da crontab, in modo da mantenere allineata la risoluzione DNS anche in caso di cambio IP da parte dell’ISP. Questo approccio è particolarmente utile per consentire a GitHub Actions o ad altri peer remoti di raggiungere sempre il laboratorio usando un endpoint stabile invece di un IP hardcoded.
+
+Esempio di aggiornamento DDNS
+Uno schema tecnico tipico per l’aggiornamento DDNS lato host Linux può essere il seguente:
+
+bash
+mkdir -p ~/duckdns
+cat <<'EOF' > ~/duckdns/duck.sh
+#!/bin/bash
+echo url="https://www.duckdns.org/update?domains=<duckdns-domain>&token=<duckdns-token>&ip=" | curl -k -o ~/duckdns/duck.log -K -
+EOF
+
+chmod 700 ~/duckdns/duck.sh
+Esempio di pianificazione periodica tramite crontab:
+
+bash
+crontab -e
+text
+*/5 * * * * ~/duckdns/duck.sh >/dev/null 2>&1
+Questo meccanismo consente di mantenere aggiornato l’hostname pubblico del laboratorio con frequenza regolare, riducendo il rischio che un cambio di IP renda irraggiungibile il nodo master dall’esterno.
+
+Integrazione con GitHub Actions
+L’utilizzo di Duck DNS e WireGuard si integra con l’evoluzione DevSecOps del progetto, perché consente alle GitHub Actions di individuare e raggiungere il laboratorio attraverso un endpoint DNS stabile, senza dipendere da indirizzi IP pubblici fissi. In questo scenario, i workflow CI/CD possono agganciarsi all’infrastruttura usando hostname DDNS, chiavi VPN e credenziali archiviate in modo sicuro nei repository secrets di GitHub.
+
+GitHub consente infatti di memorizzare valori sensibili come chiavi private, token DDNS, endpoint o credenziali applicative nella sezione Secrets and variables > Actions, rendendoli disponibili ai workflow senza esporli nel codice versionato. Questo è coerente con una gestione corretta dei dati sensibili in un repository professionale orientato a sicurezza e automazione.
+
+Gestione dei secret sensibili
+Le informazioni sensibili relative alla VPN e alla raggiungibilità esterna non devono essere salvate in chiaro nel repository. In particolare, è corretto trattare come secret elementi quali:
+
+chiavi private WireGuard;
+
+chiavi o token associati a Duck DNS;
+
+eventuali endpoint o parametri sensibili di connessione;
+
+credenziali applicative o variabili usate dalle pipeline;
+
+token utilizzati nei workflow GitHub Actions.
+
+Esempio di utilizzo di secret in un workflow GitHub Actions:
+
+text
+env:
+  WG_PRIVATE_KEY: ${{ secrets.WG_PRIVATE_KEY }}
+  WG_SERVER_ENDPOINT: ${{ secrets.WG_SERVER_ENDPOINT }}
+  DUCKDNS_TOKEN: ${{ secrets.DUCKDNS_TOKEN }}
+Questo approccio permette al codice di “riagganciarsi” ai valori sensibili senza incorporarli direttamente nei file versionati, mantenendo separazione tra logica applicativa, configurazione operativa e materiale crittografico. La repository resta così pubblicabile o condivisibile senza compromettere chiavi, token o dettagli riservati dell’infrastruttura.
+
+Ruolo della VPN nel laboratorio
+Dal punto di vista architetturale, la VPN WireGuard non è un semplice accesso remoto aggiuntivo, ma un’estensione del laboratorio che rafforza il progetto in ottica operativa. Essa abilita infatti connettività sicura verso il master, supporta automazioni controllate, facilita scenari di gestione remota e prepara l’ambiente a pipeline più mature, monitoring distribuito e future integrazioni security-oriented.
+
+Inserita nel contesto del repository, questa componente mostra che il laboratorio è progettato come piattaforma realmente utilizzabile, capace di combinare cluster K3s, simulazione OT/IoT, trasporto dati MQTT, accesso remoto sicuro e automazione CI/CD in un’unica architettura coerente.
 
 ### Parametri confermati
 - Interfaccia di rete: `ens33`
