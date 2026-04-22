@@ -81,8 +81,10 @@ jobs:
           sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Setup kubectl
-        uses: actions-hub/kubectl@v1.31.0
+      - name: Install kubectl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y kubectl
 
       - name: Configure kubeconfig
         run: |
