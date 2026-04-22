@@ -21,7 +21,7 @@ spec:
             - containerPort: 8000
           env:
             - name: MQTT_BROKER
-              value: "192.168.1.XX"
+              value: "192.168.1.21"
             - name: MQTT_PORT
               value: "1883"
             - name: MQTT_TOPIC
