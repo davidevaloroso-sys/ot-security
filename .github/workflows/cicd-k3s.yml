@@ -85,7 +85,32 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y kubectl
+      - name: Install WireGuard
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wireguard
 
+      - name: Configure WireGuard client
+        run: |
+          sudo mkdir -p /etc/wireguard
+          sudo bash -c 'cat > /etc/wireguard/wg0.conf' << EOF
+          [Interface]
+          Address = 10.6.0.2/32
+          PrivateKey = ${{ secrets.WG_CLIENT_PRIVATE_KEY }}
+
+          [Peer]
+          PublicKey = ${{ secrets.WG_SERVER_PUBLIC_KEY }}
+          Endpoint = ${{ secrets.WG_ENDPOINT }}
+          AllowedIPs = 192.168.1.21/32,10.42.0.0/16,10.43.0.0/16
+          PersistentKeepalive = 25
+          EOF
+
+      - name: Bring up WireGuard
+        run: |
+          sudo wg-quick up wg0
+          ip addr show wg0
+          sudo wg show
+          
       - name: Configure kubeconfig
         run: |
           mkdir -p $HOME/.kube
