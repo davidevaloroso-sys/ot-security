@@ -10,4 +10,4 @@ COPY main.py .
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-CMD ["python", "main.py"]
+CMD ["python", "raspi-simulator/main.py"]
