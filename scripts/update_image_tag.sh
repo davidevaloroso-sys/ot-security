@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-IMAGE_FULL="$1"  # es: ghcr.io/davidevaloroso-sys/ot-security:abcdef1234
+NEW_IMAGE="$1"
+
 FILE="k3s/ot-consumer-deploy.yaml"
 
-yq -i ".spec.template.spec.containers[0].image = \"$IMAGE_FULL\"" "$FILE"
+# Aggiorna SOLO il Deployment:
+# .spec.template.spec.containers[0].image del primo documento (Deployment)
+# Il Service (secondo documento) resta intatto.
+yq -i '
+  (select(.kind == "Deployment")
+    | .spec.template.spec.containers[0].image) = strenv(NEW_IMAGE)
+' "$FILE"
