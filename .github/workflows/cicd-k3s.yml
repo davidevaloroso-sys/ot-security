@@ -54,15 +54,21 @@ jobs:
         run: |
           docker push $IMAGE_NAME:${{ github.sha }}
 
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.2_Linux-64bit.tar.gz
+          tar zxvf trivy_0.50.2_Linux-64bit.tar.gz
+          sudo mv trivy /usr/local/bin/trivy
+
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.33.1
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+        run: |
+          trivy image --exit-code 1 \
+                       --severity CRITICAL,HIGH \
+                       --ignore-unfixed \
+                       --vuln-type os,library \
+                       $IMAGE_NAME:${{ github.sha }}
 
   deploy_k3s:
     runs-on: ubuntu-latest
