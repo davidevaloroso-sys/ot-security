@@ -58,8 +58,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.52.2/trivy_0.52.2_Linux-64bit.tar.gz
-          tar zxvf trivy_0.52.2_Linux-64bit.tar.gz
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.51.0/trivy_0.51.0_Linux-64bit.tar.gz
+          tar zxvf trivy_0.51.0_Linux-64bit.tar.gz
           sudo mv trivy /usr/local/bin/trivy
 
       - name: Run Trivy vulnerability scanner
