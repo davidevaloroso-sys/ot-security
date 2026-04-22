@@ -47,17 +47,3 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: raspi-simulator
-  namespace: ot-namespace
-spec:
-  selector:
-    app: raspi-simulator
-  ports:
-    - name: dummy
-      port: 8000
-      targetPort: 8000
-  type: ClusterIP
