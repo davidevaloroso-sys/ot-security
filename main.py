@@ -6,7 +6,9 @@ import sys
 
 import paho.mqtt.client as mqtt
 
-MQTT_BROKER = os.getenv("MQTT_BROKER", "mqtt-broker.ot-namespace.svc.cluster.local")
+MQTT_BROKER = os.getenv("MQTT_BROKER")
+if not MQTT_BROKER:
+    raise RuntimeError("MQTT_BROKER environment variable is required")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "sensors/#")
 MQTT_USERNAME = os.getenv("MQTT_USERNAME")
