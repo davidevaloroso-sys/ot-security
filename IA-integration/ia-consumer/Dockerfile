@@ -5,14 +5,15 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN useradd -u 10001 -m appuser
+RUN groupadd -g 10001 appgroup \
+    && useradd -u 10001 -g 10001 -m appuser
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY --chown=appuser:appuser mqtt_anomaly_consumer.py .
-COPY --chown=appuser:appuser model_random_forest.joblib .
+COPY --chown=10001:10001 mqtt_anomaly_consumer.py .
+COPY --chown=10001:10001 model_random_forest.joblib .
 
-USER appuser
+USER 10001
 
 CMD ["python", "mqtt_anomaly_consumer.py"]
