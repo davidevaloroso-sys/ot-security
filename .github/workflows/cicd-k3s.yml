@@ -52,7 +52,7 @@ jobs:
 
       - name: Build raspi simulator image
         run: |
-          docker build -f raspi-simulator/Dockerfile -t $IMAGE_NAME:raspi-simulator-${{ github.sha }} ./raspi-simulator
+          docker build -f IA-integration/raspi-simulator/Dockerfile -t $IMAGE_NAME:raspi-simulator-${{ github.sha }} ./IA-integration/raspi-simulator
 
       - name: Build IA consumer image
         run: |
