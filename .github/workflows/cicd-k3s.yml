@@ -22,6 +22,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Python dependencies for tests
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
       - name: Run unit tests
         run: |
           chmod +x scripts/run_tests.sh
@@ -38,6 +43,29 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas openpyxl scikit-learn joblib
+
+      - name: Verify IA consumer files
+        run: |
+          ls -lah IA-integration/ia-consumer
+          test -f IA-integration/ia-consumer/train_model.py
+          test -f IA-integration/ia-consumer/Dockerfile
+
+      - name: Generate model for IA consumer
+        working-directory: IA-integration/ia-consumer
+        run: |
+          python train_model.py
+          ls -lah
+          test -f model_random_forest.joblib
 
       - name: Log in to container registry
         uses: docker/login-action@v3
@@ -73,7 +101,7 @@ jobs:
       - name: Install Trivy CLI
         uses: ankurk91/install-trivy-cli-action@v2
         with:
-          version: 'latest'
+          version: "latest"
           cache: true
 
       - name: Run Trivy vulnerability scanner on consumer
