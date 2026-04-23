@@ -33,7 +33,7 @@ spec:
             - name: MQTT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: mosquitto-credentials
+                  name: mqtt-credentials
                   key: password
             - name: MQTT_CLIENT_ID
               value: "ia-consumer-1"
