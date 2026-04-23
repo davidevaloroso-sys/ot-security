@@ -43,17 +43,97 @@ def build_client():
     return client
 
 def publish_loop(client):
+    """
+    Simulatore di sensore:
+    - Range normale:
+        temp: 20.0 - 30.0 °C
+        hum:  45.0 - 80.0 %
+    - Ogni tanto genera valori fuori range per testare gli alert.
+    - Aggiunge sempre il campo 'alert' nel payload (None se in range).
+    """
+    normal_temp_min = 20.0
+    normal_temp_max = 30.0
+    normal_hum_min = 45.0
+    normal_hum_max = 80.0
+
+    global stop
     while not stop:
-        temp = round(random.uniform(20.0, 30.0), 1)
-        hum = round(random.uniform(35.0, 70.0), 1)
+        # Valori "normali"
+        temp = round(random.uniform(normal_temp_min, normal_temp_max), 1)
+        hum = round(random.uniform(normal_hum_min, normal_hum_max), 1)
+
+        # Ogni tanto genera anomalie
+        anomaly_chance = random.random()
+
+        # 5% delle volte, temperatura fuori range
+        if anomaly_chance < 0.05:
+            # 50% troppo bassa, 50% troppo alta
+            if random.random() < 0.5:
+                temp = round(random.uniform(0.0, normal_temp_min - 5.0), 1)
+            else:
+                temp = round(random.uniform(normal_temp_max + 5.0, 90.0), 1)
+
+        # Altre 5% delle volte, umidità fuori range
+        elif anomaly_chance < 0.10:
+            if random.random() < 0.5:
+                hum = round(random.uniform(0.0, normal_hum_min - 10.0), 1)
+            else:
+                hum = round(random.uniform(normal_hum_max + 5.0, 100.0), 1)
+
         now = int(time.time())
-        payload_temp = json.dumps({"device": "raspi1", "value": temp, "unit": "C", "ts": now})
-        payload_hum = json.dumps({"device": "raspi1", "value": hum, "unit": "%", "ts": now})
 
-        client.publish(MQTT_TOPIC_TEMP, payload_temp, qos=0, retain=False)
-        client.publish(MQTT_TOPIC_HUM, payload_hum, qos=0, retain=False)
+        # Determina se i valori sono in range
+        temp_in_range = normal_temp_min <= temp <= normal_temp_max
+        hum_in_range = normal_hum_min <= hum <= normal_hum_max
 
-        logging.info("Published temp=%s hum=%s", temp, hum)
+        # Messaggi di alert locali
+        temp_alert = None
+        hum_alert = None
+
+        if not temp_in_range:
+            if temp < normal_temp_min:
+                temp_alert = "TEMP_BELOW_RANGE"
+            else:
+                temp_alert = "TEMP_ABOVE_RANGE"
+
+        if not hum_in_range:
+            if hum < normal_hum_min:
+                hum_alert = "HUM_BELOW_RANGE"
+            else:
+                hum_alert = "HUM_ABOVE_RANGE"
+
+        payload_temp = {
+            "device": "raspi1",
+            "value": temp,
+            "unit": "C",
+            "ts": now,
+            "in_range": temp_in_range,
+            "alert": temp_alert,
+        }
+
+        payload_hum = {
+            "device": "raspi1",
+            "value": hum,
+            "unit": "%",
+            "ts": now,
+            "in_range": hum_in_range,
+            "alert": hum_alert,
+        }
+
+        client.publish(MQTT_TOPIC_TEMP, json.dumps(payload_temp), qos=0, retain=False)
+        client.publish(MQTT_TOPIC_HUM, json.dumps(payload_hum), qos=0, retain=False)
+
+        logging.info(
+            "Published temp=%s hum=%s (anomaly_chance=%.3f, temp_in_range=%s, hum_in_range=%s, temp_alert=%s, hum_alert=%s)",
+            temp,
+            hum,
+            anomaly_chance,
+            temp_in_range,
+            hum_in_range,
+            temp_alert,
+            hum_alert,
+        )
+
         time.sleep(PUBLISH_INTERVAL)
 
 def main():
