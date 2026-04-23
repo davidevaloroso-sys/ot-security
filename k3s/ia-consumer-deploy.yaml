@@ -28,7 +28,7 @@ spec:
             - name: MQTT_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: mosquitto-credentials
+                  name: mqtt-credentials
                   key: username
             - name: MQTT_PASSWORD
               valueFrom:
