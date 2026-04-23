@@ -54,6 +54,10 @@ jobs:
         run: |
           docker build -f raspi-simulator/Dockerfile -t $IMAGE_NAME:raspi-simulator-${{ github.sha }} ./raspi-simulator
 
+      - name: Build IA consumer image
+        run: |
+          docker build -f IA-integration/ia-consumer/Dockerfile -t $IMAGE_NAME:ia-consumer-${{ github.sha }} ./IA-integration/ia-consumer
+
       - name: Push consumer image
         run: |
           docker push $IMAGE_NAME:${{ github.sha }}
@@ -61,6 +65,10 @@ jobs:
       - name: Push raspi simulator image
         run: |
           docker push $IMAGE_NAME:raspi-simulator-${{ github.sha }}
+
+      - name: Push IA consumer image
+        run: |
+          docker push $IMAGE_NAME:ia-consumer-${{ github.sha }}
 
       - name: Install Trivy CLI
         uses: ankurk91/install-trivy-cli-action@v2
@@ -83,6 +91,14 @@ jobs:
           --ignore-unfixed \
           --vuln-type os,library \
           $IMAGE_NAME:raspi-simulator-${{ github.sha }}
+
+      - name: Run Trivy vulnerability scanner on IA consumer
+        run: |
+          trivy image --exit-code 1 \
+          --severity CRITICAL \
+          --ignore-unfixed \
+          --vuln-type os,library \
+          $IMAGE_NAME:ia-consumer-${{ github.sha }}
 
   deploy_k3s:
     runs-on: ubuntu-latest
@@ -146,10 +162,17 @@ jobs:
         env:
           IMAGE: ${{ env.IMAGE_NAME }}:raspi-simulator-${{ github.sha }}
 
+      - name: Update IA consumer deployment image
+        run: |
+          yq -i '.spec.template.spec.containers[0].image = env(IMAGE)' k3s/ia-consumer-deploy.yaml
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:ia-consumer-${{ github.sha }}
+
       - name: Apply Kubernetes manifests
         run: |
           kubectl apply -f k3s/ot-consumer-deploy.yaml -n ot-namespace
           kubectl apply -f k3s/raspi-simulator-deploy.yaml -n ot-namespace
+          kubectl apply -f k3s/ia-consumer-deploy.yaml -n ot-namespace
 
       - name: Check rollout status consumer
         run: |
@@ -158,3 +181,7 @@ jobs:
       - name: Check rollout status raspi simulator
         run: |
           kubectl rollout status deployment/raspi-simulator -n ot-namespace --timeout=60s
+
+      - name: Check rollout status IA consumer
+        run: |
+          kubectl rollout status deployment/ia-consumer -n ot-namespace --timeout=60s
