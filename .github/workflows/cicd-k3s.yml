@@ -50,12 +50,6 @@ jobs:
           name: bandit-reports
           path: bandit-reports/
 
-      - name: Upload Bandit SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: bandit-reports/bandit-report.sarif
-          category: bandit
 
   build_and_scan:
     runs-on: ubuntu-latest

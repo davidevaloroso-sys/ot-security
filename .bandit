@@ -1,8 +1,0 @@
-bandit:
-  exclude_dirs:
-    - .git
-    - .venv
-    - __pycache__
-    - .github
-    - k3s
-    - tests

@@ -8,7 +8,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 python -m pip install --upgrade pip
-pip install "bandit[sarif,toml]"
+pip install bandit
 
 mkdir -p "${REPORT_DIR}"
 
@@ -28,14 +28,6 @@ bandit -r . \
   --exit-zero \
   -f json \
   -o "${REPORT_DIR}/bandit-report.json"
-
-bandit -r . \
-  -x .git,.venv,__pycache__,.github,k3s,tests \
-  --severity-level low \
-  --confidence-level low \
-  --exit-zero \
-  -f sarif \
-  -o "${REPORT_DIR}/bandit-report.sarif"
 
 echo "[*] Enforcing Bandit gate (MEDIUM severity / MEDIUM confidence)"
 bandit -r . \
