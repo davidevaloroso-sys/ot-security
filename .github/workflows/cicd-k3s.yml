@@ -10,9 +10,15 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/davidevaloroso-sys/ot-security
 
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
 jobs:
   test_sast:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,14 +38,29 @@ jobs:
           chmod +x scripts/run_tests.sh
           ./scripts/run_tests.sh
 
-      - name: Run SAST (bandit)
+      - name: Run SAST (Bandit)
         run: |
           chmod +x scripts/run_sast.sh
           ./scripts/run_sast.sh
 
+      - name: Upload Bandit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-reports
+          path: bandit-reports/
+
+      - name: Upload Bandit SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit-reports/bandit-report.sarif
+          category: bandit
+
   build_and_scan:
     runs-on: ubuntu-latest
     needs: test_sast
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -107,31 +128,32 @@ jobs:
       - name: Run Trivy vulnerability scanner on consumer
         run: |
           trivy image --exit-code 1 \
-          --severity CRITICAL \
-          --ignore-unfixed \
-          --vuln-type os,library \
-          $IMAGE_NAME:${{ github.sha }}
+            --severity CRITICAL \
+            --ignore-unfixed \
+            --vuln-type os,library \
+            $IMAGE_NAME:${{ github.sha }}
 
       - name: Run Trivy vulnerability scanner on raspi simulator
         run: |
           trivy image --exit-code 1 \
-          --severity CRITICAL \
-          --ignore-unfixed \
-          --vuln-type os,library \
-          $IMAGE_NAME:raspi-simulator-${{ github.sha }}
+            --severity CRITICAL \
+            --ignore-unfixed \
+            --vuln-type os,library \
+            $IMAGE_NAME:raspi-simulator-${{ github.sha }}
 
       - name: Run Trivy vulnerability scanner on IA consumer
         run: |
           trivy image --exit-code 1 \
-          --severity CRITICAL \
-          --ignore-unfixed \
-          --vuln-type os,library \
-          $IMAGE_NAME:ia-consumer-${{ github.sha }}
+            --severity CRITICAL \
+            --ignore-unfixed \
+            --vuln-type os,library \
+            $IMAGE_NAME:ia-consumer-${{ github.sha }}
 
   deploy_k3s:
     runs-on: ubuntu-latest
     needs: build_and_scan
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
