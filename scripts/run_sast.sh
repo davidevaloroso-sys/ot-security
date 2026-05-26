@@ -1,9 +1,42 @@
 #!/usr/bin/env bash
-set -e
+set -Eeuo pipefail
 
+REPORT_DIR="bandit-reports"
+CONFIG_FILE=".bandit"
+
+echo "[*] Preparing Python virtual environment"
 python -m venv .venv
 source .venv/bin/activate
-pip install bandit -r requirements.txt
 
-# Se vuoi essere soft all'inizio:
-bandit -r . -ll || echo "Bandit found issues, but not failing pipeline yet"
+python -m pip install --upgrade pip
+pip install "bandit[toml]"
+
+mkdir -p "${REPORT_DIR}"
+
+echo "[*] Running Bandit full report (LOW severity / LOW confidence)"
+bandit -r . \
+  -c "${CONFIG_FILE}" \
+  --severity-level low \
+  --confidence-level low \
+  -f txt \
+  -o "${REPORT_DIR}/bandit-report.txt"
+
+bandit -r . \
+  -c "${CONFIG_FILE}" \
+  --severity-level low \
+  --confidence-level low \
+  -f json \
+  -o "${REPORT_DIR}/bandit-report.json"
+
+bandit -r . \
+  -c "${CONFIG_FILE}" \
+  --severity-level low \
+  --confidence-level low \
+  -f sarif \
+  -o "${REPORT_DIR}/bandit-report.sarif"
+
+echo "[*] Enforcing Bandit gate (MEDIUM severity / MEDIUM confidence)"
+bandit -r . \
+  -c "${CONFIG_FILE}" \
+  --severity-level medium \
+  --confidence-level medium
