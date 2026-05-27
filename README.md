@@ -1,39 +1,24 @@
 # OT Security Lab on Ubuntu Server + K3s
-flowchart LR
-  GH[GitHub Actions Runner] -->|WireGuard VPN| WG[WireGuard Endpoint on Master]
-  WG -->|kubectl apply / rollout| K3S[K3s API Server on 192.168.1.21]
+flowchart TD
+  A[GitHub Actions] --> B[WireGuard tunnel]
+  B --> C[K3s API Server\n192.168.1.21:6443]
 
-  subgraph HOME[Home Lab Network]
-    direction LR
-    MASTER[Ubuntu Master Node\n192.168.1.21]
-    BROKER[MQTT Broker\n(mosquitto on Master)]
-    WORKER[Worker Node(s)]
-  end
+  C --> D[Apply manifests]
+  D --> E[Create / Update Deployments]
 
-  K3S --> MASTER
-  MASTER --> BROKER
-  K3S --> WORKER
+  E --> F[raspi-simulator Pod]
+  E --> G[ot-mqtt-consumer Pod]
+  E --> H[ia-consumer Pod]
 
-  subgraph CLUSTER[K3s Cluster Runtime]
-    direction TB
-    SIM[raspi-simulator Pod]
-    CONS[ot-mqtt-consumer Pod]
-    IA[ia-consumer Pod]
-  end
+  F --> I[MQTT Broker on Master\n192.168.1.21:1883]
+  I --> G
 
-  WORKER --> SIM
-  WORKER --> CONS
-  WORKER --> IA
+  J[mosquitto_sub from Master] --> I
 
-  SIM -->|MQTT publish to 192.168.1.21:1883| BROKER
-  BROKER -->|MQTT subscribe / logs| CONS
-
-  GH -.->|no access without VPN| K3S
-  GH -.->|no direct MQTT path| BROKER
-
-  MASTER -.->|if powered off BEFORE deploy| K3S
-  MASTER -.->|if powered off AFTER deploy| SIM
-  
+  K[Master OFF before deploy] -.-> C
+  L[Master OFF after deploy] -.-> F
+  L -.-> G
+  L -.-> H
 ## 1. Descrizione generale
 Questo repository documenta un laboratorio tecnico costruito su **Ubuntu Server** e **K3s**, progettato come piattaforma reale per attività di cybersecurity, DevSecOps, automazione infrastrutturale, simulazione OT/IoT e futura integrazione con componenti di monitoring e SIEM. L'ambiente non nasce come test isolato, ma come base operativa modulare su cui validare configurazioni di rete, orchestrazione di servizi containerizzati, flussi dati MQTT e controlli di sicurezza applicabili a use case di laboratorio e proof-of-concept.
 
