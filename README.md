@@ -2,7 +2,7 @@
 ```mermaid
 flowchart TD
   A[GitHub Actions] --> B[WireGuard tunnel]
-  B --> C[K3s API Server\n192.168.1.21:6443]
+  B --> C[K3s API Server<br/>192.168.1.21:6443]
 
   C --> D[Apply manifests]
   D --> E[Create / Update Deployments]
@@ -11,15 +11,9 @@ flowchart TD
   E --> G[ot-mqtt-consumer Pod]
   E --> H[ia-consumer Pod]
 
-  F --> I[MQTT Broker on Master\n192.168.1.21:1883]
-  I --> G
-
-  J[mosquitto_sub from Master] --> I
-
-  K[Master OFF before deploy] -.-> C
-  L[Master OFF after deploy] -.-> F
-  L -.-> G
-  L -.-> H
+  F --> I[MQTT Broker on Ubuntu Master<br/>192.168.1.21:1883]
+  G --> I
+  J[mosquitto_sub on Master] --> I
 ```
 ## 1. Descrizione generale
 Questo repository documenta un laboratorio tecnico costruito su **Ubuntu Server** e **K3s**, progettato come piattaforma reale per attività di cybersecurity, DevSecOps, automazione infrastrutturale, simulazione OT/IoT e futura integrazione con componenti di monitoring e SIEM. L'ambiente non nasce come test isolato, ma come base operativa modulare su cui validare configurazioni di rete, orchestrazione di servizi containerizzati, flussi dati MQTT e controlli di sicurezza applicabili a use case di laboratorio e proof-of-concept.
