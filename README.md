@@ -1,4 +1,5 @@
 # OT Security Lab on Ubuntu Server + K3s
+'''mermaid
 flowchart TD
   A[GitHub Actions] --> B[WireGuard tunnel]
   B --> C[K3s API Server\n192.168.1.21:6443]
@@ -19,6 +20,7 @@ flowchart TD
   L[Master OFF after deploy] -.-> F
   L -.-> G
   L -.-> H
+'''
 ## 1. Descrizione generale
 Questo repository documenta un laboratorio tecnico costruito su **Ubuntu Server** e **K3s**, progettato come piattaforma reale per attività di cybersecurity, DevSecOps, automazione infrastrutturale, simulazione OT/IoT e futura integrazione con componenti di monitoring e SIEM. L'ambiente non nasce come test isolato, ma come base operativa modulare su cui validare configurazioni di rete, orchestrazione di servizi containerizzati, flussi dati MQTT e controlli di sicurezza applicabili a use case di laboratorio e proof-of-concept.
 
