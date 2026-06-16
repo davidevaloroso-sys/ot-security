@@ -238,7 +238,7 @@ jobs:
 
       - name: Check rollout status OpenPLC
         run: |
-          kubectl rollout status deployment/openplc -n ot-namespace --timeout=120s
+          kubectl rollout status deployment/openplc -n ot-namespace --timeout=300s
 
       - name: Check rollout status InfluxDB
         run: |
