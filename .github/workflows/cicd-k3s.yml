@@ -195,10 +195,6 @@ jobs:
           echo "${{ secrets.K3S_KUBECONFIG }}" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
-      - name: Ensure namespace exists
-        run: |
-          kubectl get namespace ot-namespace || kubectl create namespace ot-namespace
-
       - name: Create or update observability Kubernetes secret
         run: |
           kubectl create secret generic observability-secrets \
