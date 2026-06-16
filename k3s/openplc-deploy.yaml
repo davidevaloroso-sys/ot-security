@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openplc-pvc
+  namespace: ot-namespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openplc
+  namespace: ot-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openplc
+  template:
+    metadata:
+      labels:
+        app: openplc
+    spec:
+      containers:
+        - name: openplc
+          image: ghcr.io/autonomy-logic/openplc-runtime:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: https-ui
+              containerPort: 8443
+            - name: modbus
+              containerPort: 502
+          securityContext:
+            capabilities:
+              add: ["SYS_NICE", "SYS_RESOURCE"]
+          volumeMounts:
+            - name: openplc-storage
+              mountPath: /var/run/runtime
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      volumes:
+        - name: openplc-storage
+          persistentVolumeClaim:
+            claimName: openplc-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openplc
+  namespace: ot-namespace
+spec:
+  selector:
+    app: openplc
+  ports:
+    - name: https-ui
+      port: 8443
+      targetPort: 8443
+    - name: modbus
+      port: 502
+      targetPort: 502
+  type: ClusterIP
