@@ -195,6 +195,23 @@ jobs:
           echo "${{ secrets.K3S_KUBECONFIG }}" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
+      - name: Ensure namespace exists
+        run: |
+          kubectl get namespace ot-namespace || kubectl create namespace ot-namespace
+
+      - name: Create or update observability Kubernetes secret
+        run: |
+          kubectl create secret generic observability-secrets \
+            -n ot-namespace \
+            --from-literal=GRAFANA_ADMIN_USER='${{ secrets.GRAFANA_ADMIN_USER }}' \
+            --from-literal=GRAFANA_ADMIN_PASSWORD='${{ secrets.GRAFANA_ADMIN_PASSWORD }}' \
+            --from-literal=INFLUXDB_ADMIN_USER='${{ secrets.INFLUXDB_ADMIN_USER }}' \
+            --from-literal=INFLUXDB_ADMIN_PASSWORD='${{ secrets.INFLUXDB_ADMIN_PASSWORD }}' \
+            --from-literal=INFLUXDB_ADMIN_TOKEN='${{ secrets.INFLUXDB_ADMIN_TOKEN }}' \
+            --from-literal=INFLUXDB_ORG='${{ secrets.INFLUXDB_ORG }}' \
+            --from-literal=INFLUXDB_BUCKET='${{ secrets.INFLUXDB_BUCKET }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Update consumer deployment image
         run: |
           chmod +x scripts/update_image_tag.sh
@@ -215,9 +232,29 @@ jobs:
 
       - name: Apply Kubernetes manifests
         run: |
+          kubectl apply -f k3s/openplc-deploy.yaml -n ot-namespace
+          kubectl apply -f k3s/influxdb-deploy.yaml -n ot-namespace
+          kubectl apply -f k3s/nodered-deploy.yaml -n ot-namespace
+          kubectl apply -f k3s/grafana-deploy.yaml -n ot-namespace
           kubectl apply -f k3s/ot-consumer-deploy.yaml -n ot-namespace
           kubectl apply -f k3s/raspi-simulator-deploy.yaml -n ot-namespace
           kubectl apply -f k3s/ia-consumer-deploy.yaml -n ot-namespace
+
+      - name: Check rollout status OpenPLC
+        run: |
+          kubectl rollout status deployment/openplc -n ot-namespace --timeout=120s
+
+      - name: Check rollout status InfluxDB
+        run: |
+          kubectl rollout status deployment/influxdb -n ot-namespace --timeout=120s
+
+      - name: Check rollout status Node-RED
+        run: |
+          kubectl rollout status deployment/nodered -n ot-namespace --timeout=120s
+
+      - name: Check rollout status Grafana
+        run: |
+          kubectl rollout status deployment/grafana -n ot-namespace --timeout=120s
 
       - name: Check rollout status consumer
         run: |

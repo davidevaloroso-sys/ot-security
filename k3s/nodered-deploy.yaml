@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nodered-pvc
+  namespace: ot-namespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodered
+  namespace: ot-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodered
+  template:
+    metadata:
+      labels:
+        app: nodered
+    spec:
+      containers:
+        - name: nodered
+          image: nodered/node-red:3.1.9
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 1880
+          env:
+            - name: TZ
+              value: Europe/Rome
+            - name: OPENPLC_HOST
+              value: openplc
+            - name: OPENPLC_PORT
+              value: "502"
+            - name: MQTT_BROKER_HOST
+              value: "192.168.1.21"
+            - name: MQTT_BROKER_PORT
+              value: "1883"
+            - name: INFLUXDB_URL
+              value: http://influxdb:8086
+            - name: INFLUXDB_ORG
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: INFLUXDB_ORG
+            - name: INFLUXDB_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: INFLUXDB_BUCKET
+            - name: INFLUXDB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: INFLUXDB_ADMIN_TOKEN
+          volumeMounts:
+            - name: nodered-storage
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: nodered-storage
+          persistentVolumeClaim:
+            claimName: nodered-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodered
+  namespace: ot-namespace
+spec:
+  selector:
+    app: nodered
+  ports:
+    - name: http
+      port: 1880
+      targetPort: 1880
+  type: ClusterIP
