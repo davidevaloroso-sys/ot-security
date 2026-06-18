@@ -16,20 +16,34 @@ spec:
       containers:
         - name: raspi-simulator
           image: ghcr.io/davidevaloroso-sys/ot-security:raspi-simulator-latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
-            - name: MODBUS_HOST
-              value: "openplc"
-            - name: MODBUS_PORT
-              value: "502"
+            - name: MQTT_BROKER
+              value: "192.168.1.21"
+            - name: MQTT_PORT
+              value: "1883"
+            - name: MQTT_CLIENT_ID
+              value: "raspi-simulator-1"
+            - name: MQTT_TOPIC_TEMP
+              value: "lab/raspi1/temperature"
+            - name: MQTT_TOPIC_HUM
+              value: "lab/raspi1/humidity"
             - name: PUBLISH_INTERVAL
               value: "5"
-            - name: DEVICE_NAME
-              value: "raspi1"
+            - name: MQTT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: username
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: password
           resources:
             requests:
-              cpu: "50m"
+              cpu: "20m"
               memory: "64Mi"
             limits:
-              cpu: "200m"
+              cpu: "100m"
               memory: "128Mi"
