@@ -224,6 +224,12 @@ jobs:
           ip addr show wg0
           sudo wg show
 
+      - name: Validate VPN, route and API
+        run: |
+          sudo wg show || true
+          ip route get 192.168.1.21
+          nc -vz -w 5 192.168.1.21 6443
+          curl -kv --connect-timeout 5 https://192.168.1.21:6443/version
 
       - name: Configure kubeconfig
         run: |
