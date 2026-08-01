@@ -16,7 +16,7 @@ spec:
       containers:
         - name: raspi-simulator
           image: ghcr.io/davidevaloroso-sys/ot-security:raspi-simulator-latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: MQTT_BROKER
               value: "192.168.1.21"
