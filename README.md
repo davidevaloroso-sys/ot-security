@@ -76,6 +76,8 @@ Il cluster è attualmente definito con una topologia semplice ma funzionale, pen
 - **1 worker node**: nodo destinato all'esecuzione di workload e test operativi.
 - **Espansione futura**: possibilità di aggiungere ulteriori worker o componenti specializzati.
 
+TEST PUSH
+
 Questa topologia consente di mantenere bassa la complessità iniziale, pur offrendo già una separazione concreta tra controllo del cluster e capacità computazionale distribuita. È una scelta coerente con un laboratorio orientato a sperimentazione DevSecOps, simulazione di servizi e validazione progressiva di automazioni.
 
 ## 5. Dettaglio master e worker
