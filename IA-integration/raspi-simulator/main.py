@@ -1,146 +1,227 @@
 import json
+import logging
 import os
 import random
+import signal
+import sys
+import threading
 import time
-from datetime import datetime, timezone
 
-from pymodbus.client import ModbusTcpClient
+import paho.mqtt.client as mqtt
 
-MODBUS_HOST = os.getenv("MODBUS_HOST", "openplc")
-MODBUS_PORT = int(os.getenv("MODBUS_PORT", "502"))
+MQTT_BROKER = os.getenv("MQTT_BROKER")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_USERNAME = os.getenv("MQTT_USERNAME")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "raspi-simulator-1")
+MQTT_TOPIC_TEMP = os.getenv("MQTT_TOPIC_TEMP", "lab/raspi1/temperature")
+MQTT_TOPIC_HUM = os.getenv("MQTT_TOPIC_HUM", "lab/raspi1/humidity")
 PUBLISH_INTERVAL = int(os.getenv("PUBLISH_INTERVAL", "5"))
-DEVICE_NAME = os.getenv("DEVICE_NAME", "raspi1")
+MQTT_CONNECT_TIMEOUT = int(os.getenv("MQTT_CONNECT_TIMEOUT", "20"))
 
-TEMP_MIN = 20.0
-TEMP_MAX = 30.0
-HUM_MIN = 45.0
-HUM_MAX = 80.0
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger("raspi-simulator")
 
-ALERT_CODES = {
-    None: 0,
-    "TEMP_BELOW_RANGE": 1,
-    "TEMP_ABOVE_RANGE": 2,
-    "HUM_BELOW_RANGE": 3,
-    "HUM_ABOVE_RANGE": 4,
-}
-
-sequence = 0
+stop = False
+connected = threading.Event()
 
 
-def utc_ts():
-    return int(datetime.now(timezone.utc).timestamp())
+def handle_signal(signum, frame):
+    global stop
+    logger.info("Received signal %s, shutting down", signum)
+    stop = True
+    connected.set()
 
 
-def rand_in_range(low, high, digits=1):
-    return round(random.uniform(low, high), digits)
+signal.signal(signal.SIGTERM, handle_signal)
+signal.signal(signal.SIGINT, handle_signal)
 
 
-def generate_temperature():
-    if random.random() < 0.10:
-        if random.choice([True, False]):
-            value = rand_in_range(5.0, 19.9)
-            return value, False, "TEMP_BELOW_RANGE"
-        value = rand_in_range(30.1, 45.0)
-        return value, False, "TEMP_ABOVE_RANGE"
-    value = rand_in_range(TEMP_MIN, TEMP_MAX)
-    return value, True, None
+def on_connect(client, userdata, flags, rc, properties=None):
+    if rc == 0:
+        connected.set()
+        logger.info(
+            "MQTT connected broker=%s:%s client_id=%s",
+            MQTT_BROKER,
+            MQTT_PORT,
+            MQTT_CLIENT_ID,
+        )
+    else:
+        connected.clear()
+        logger.error("MQTT connection refused rc=%s", rc)
 
 
-def generate_humidity():
-    if random.random() < 0.10:
-        if random.choice([True, False]):
-            value = rand_in_range(10.0, 44.9)
-            return value, False, "HUM_BELOW_RANGE"
-        value = rand_in_range(80.1, 95.0)
-        return value, False, "HUM_ABOVE_RANGE"
-    value = rand_in_range(HUM_MIN, HUM_MAX)
-    return value, True, None
+def on_connect_fail(client, userdata):
+    connected.clear()
+    logger.error(
+        "MQTT TCP connection failed broker=%s:%s",
+        MQTT_BROKER,
+        MQTT_PORT,
+    )
 
 
-def build_payload():
-    global sequence
-    sequence += 1
+def on_disconnect(client, userdata, rc, properties=None):
+    connected.clear()
+    if rc == 0:
+        logger.info("MQTT disconnected cleanly")
+    else:
+        logger.warning("MQTT disconnected unexpectedly rc=%s; retrying", rc)
 
-    temp_value, temp_in_range, temp_alert = generate_temperature()
-    hum_value, hum_in_range, hum_alert = generate_humidity()
 
-    return {
-        "device": DEVICE_NAME,
-        "ts": utc_ts(),
-        "sequence": sequence,
-        "temperature": {
-            "value": temp_value,
+def build_client():
+    if not MQTT_BROKER:
+        raise RuntimeError("MQTT_BROKER environment variable is required")
+
+    client = mqtt.Client(
+        mqtt.CallbackAPIVersion.VERSION1,
+        client_id=MQTT_CLIENT_ID,
+        protocol=mqtt.MQTTv311,
+    )
+    client.reconnect_delay_set(min_delay=1, max_delay=30)
+
+    if MQTT_USERNAME and MQTT_PASSWORD:
+        client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+
+    client.on_connect = on_connect
+    client.on_connect_fail = on_connect_fail
+    client.on_disconnect = on_disconnect
+    client.enable_logger(logger)
+    return client
+
+
+def publish_json(client, topic, payload):
+    message = client.publish(
+        topic,
+        json.dumps(payload),
+        qos=1,
+        retain=False,
+    )
+
+    if message.rc != mqtt.MQTT_ERR_SUCCESS:
+        logger.error(
+            "MQTT publish enqueue failed topic=%s rc=%s",
+            topic,
+            message.rc,
+        )
+        return False
+
+    message.wait_for_publish(timeout=5)
+
+    if not message.is_published():
+        logger.error("MQTT publish timeout topic=%s", topic)
+        return False
+
+    logger.info("MQTT published topic=%s payload=%s", topic, payload)
+    return True
+
+
+def publish_loop(client):
+    normal_temp_min, normal_temp_max = 20.0, 30.0
+    normal_hum_min, normal_hum_max = 45.0, 80.0
+
+    global stop
+
+    while not stop:
+        if not connected.wait(timeout=MQTT_CONNECT_TIMEOUT):
+            logger.warning(
+                "MQTT unavailable; waiting broker=%s:%s",
+                MQTT_BROKER,
+                MQTT_PORT,
+            )
+            continue
+
+        temp = round(random.uniform(normal_temp_min, normal_temp_max), 1)
+        hum = round(random.uniform(normal_hum_min, normal_hum_max), 1)
+        anomaly_chance = random.random()
+
+        if anomaly_chance < 0.05:
+            temp = (
+                round(random.uniform(0.0, normal_temp_min - 5.0), 1)
+                if random.random() < 0.5
+                else round(random.uniform(normal_temp_max + 5.0, 90.0), 1)
+            )
+        elif anomaly_chance < 0.10:
+            hum = (
+                round(random.uniform(0.0, normal_hum_min - 10.0), 1)
+                if random.random() < 0.5
+                else round(random.uniform(normal_hum_max + 5.0, 100.0), 1)
+            )
+
+        temp_in_range = normal_temp_min <= temp <= normal_temp_max
+        hum_in_range = normal_hum_min <= hum <= normal_hum_max
+
+        temp_alert = (
+            None if temp_in_range
+            else "TEMP_BELOW_RANGE" if temp < normal_temp_min
+            else "TEMP_ABOVE_RANGE"
+        )
+        hum_alert = (
+            None if hum_in_range
+            else "HUM_BELOW_RANGE" if hum < normal_hum_min
+            else "HUM_ABOVE_RANGE"
+        )
+
+        timestamp = int(time.time())
+
+        payload_temp = {
+            "device": "raspi1",
+            "value": temp,
             "unit": "C",
+            "ts": timestamp,
             "in_range": temp_in_range,
             "alert": temp_alert,
-        },
-        "humidity": {
-            "value": hum_value,
+        }
+        payload_hum = {
+            "device": "raspi1",
+            "value": hum,
             "unit": "%",
+            "ts": timestamp,
             "in_range": hum_in_range,
             "alert": hum_alert,
-        },
-    }
+        }
 
+        temp_ok = publish_json(client, MQTT_TOPIC_TEMP, payload_temp)
+        hum_ok = publish_json(client, MQTT_TOPIC_HUM, payload_hum)
 
-def write_to_modbus(client, payload):
-    temp = payload["temperature"]
-    hum = payload["humidity"]
+        logger.info(
+            "Cycle completed temp_ok=%s hum_ok=%s temp=%s hum=%s anomaly_chance=%.3f",
+            temp_ok,
+            hum_ok,
+            temp,
+            hum,
+            anomaly_chance,
+        )
 
-    registers = [
-        int(round(temp["value"] * 10)),
-        int(round(hum["value"] * 10)),
-        ALERT_CODES[temp["alert"]],
-        ALERT_CODES[hum["alert"]],
-        payload["sequence"] % 65535,
-    ]
-
-    rr = client.write_registers(0, registers)
-    if rr.isError():
-        raise RuntimeError(f"write_registers failed: {rr}")
-
-    rc0 = client.write_coil(0, temp["in_range"])
-    if rc0.isError():
-        raise RuntimeError(f"write_coil temp failed: {rc0}")
-
-    rc1 = client.write_coil(1, hum["in_range"])
-    if rc1.isError():
-        raise RuntimeError(f"write_coil hum failed: {rc1}")
+        for _ in range(PUBLISH_INTERVAL):
+            if stop:
+                break
+            time.sleep(1)
 
 
 def main():
-    while True:
-        client = ModbusTcpClient(host=MODBUS_HOST, port=MODBUS_PORT, timeout=5)
-        try:
-            if not client.connect():
-                raise RuntimeError(f"cannot connect to {MODBUS_HOST}:{MODBUS_PORT}")
+    client = build_client()
 
-            payload = build_payload()
-            write_to_modbus(client, payload)
+    logger.info(
+        "MQTT connection starting broker=%s:%s temp_topic=%s hum_topic=%s",
+        MQTT_BROKER,
+        MQTT_PORT,
+        MQTT_TOPIC_TEMP,
+        MQTT_TOPIC_HUM,
+    )
 
-            print(json.dumps({
-                "event": "modbus_write_ok",
-                "target": f"{MODBUS_HOST}:{MODBUS_PORT}",
-                "device": payload["device"],
-                "sequence": payload["sequence"],
-                "ts": payload["ts"],
-                "temperature": payload["temperature"],
-                "humidity": payload["humidity"],
-            }), flush=True)
+    client.connect_async(MQTT_BROKER, MQTT_PORT, keepalive=60)
+    client.loop_start()
 
-        except Exception as e:
-            print(json.dumps({
-                "event": "modbus_write_error",
-                "target": f"{MODBUS_HOST}:{MODBUS_PORT}",
-                "error": str(e),
-            }), flush=True)
-        finally:
-            try:
-                client.close()
-            except Exception:
-                pass
-
-        time.sleep(PUBLISH_INTERVAL)
+    try:
+        publish_loop(client)
+    finally:
+        client.loop_stop()
+        client.disconnect()
+        logger.info("Simulator stopped")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
