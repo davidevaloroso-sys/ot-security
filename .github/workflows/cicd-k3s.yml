@@ -258,8 +258,14 @@ jobs:
         env:
           IMAGE: ${{ env.IMAGE_NAME }}:ia-consumer-${{ github.sha }}
 
+      - name: Apply OT platform manifests
+        run: |
+          kubectl apply -f k3s/influxdb-deploy.yaml -n ot-namespace
+          kubectl apply -f k3s/nodered-deploy.yaml -n ot-namespace
+          kubectl apply -f k3s/grafana-deploy.yaml -n ot-namespace
+          kubectl apply -f k3s/openplc-deploy.yaml -n ot-namespace
 
-      - name: Apply Kubernetes manifests
+      - name: Apply versioned OT workloads
         run: |
           kubectl apply -f k3s/ot-consumer-deploy.yaml -n ot-namespace
           kubectl apply -f k3s/raspi-simulator-deploy.yaml -n ot-namespace
