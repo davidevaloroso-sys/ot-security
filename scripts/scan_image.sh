@@ -7,4 +7,8 @@ trap 'rm -rf "$scan_dir"' EXIT
 curl --fail --silent --show-error --location https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz -o "$scan_dir/trivy.tar.gz"
 printf '%s  %s\n' 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a "$scan_dir/trivy.tar.gz" | sha256sum --check
 tar -xzf "$scan_dir/trivy.tar.gz" -C "$scan_dir" trivy
-"$scan_dir/trivy" image --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --timeout 15m "$1"
+report="${2:-scan-report.json}"
+scan_status=0
+"$scan_dir/trivy" image --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --timeout 15m --format json --output "$report" "$1" || scan_status=$?
+if [ -f "$report" ]; then "$scan_dir/trivy" convert --format table "$report"; fi
+exit "$scan_status"

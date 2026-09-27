@@ -23,15 +23,15 @@ def test_manifests_secure_and_probe_ready():
 def test_ci_pr_has_no_write_permissions_and_scan_precedes_publish():
     workflow=yaml.safe_load((ROOT/'.github/workflows/cicd-k3s.yml').read_text())
     assert workflow['permissions']=={'contents':'read'}
-    assert workflow['jobs']['publish']['needs']==['build_scan', 'integration']
+    assert workflow['jobs']['publish']['needs']==['build', 'security_scan', 'integration']
     assert workflow['jobs']['deploy_k3s']['if'] is False
     assert "github.event_name == 'push'" in workflow['jobs']['publish']['if']
-    assert 'permissions' not in workflow['jobs']['build_scan']
+    assert 'permissions' not in workflow['jobs']['build']
     for job in workflow['jobs'].values():
         for step in job['steps']:
             if step.get('uses','').startswith('actions/checkout@'):
                 assert step['with']['persist-credentials'] is False
-    build=workflow['jobs']['build_scan']['steps']
+    build=workflow['jobs']['build']['steps']
     assert not any('docker push' in s.get('run','') for s in build)
 
 

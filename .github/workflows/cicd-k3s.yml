@@ -60,10 +60,11 @@ jobs:
           path: |
             IA-integration/ia-consumer/model_random_forest.joblib
             IA-integration/ia-consumer/training_metrics.json
-  build_scan:
+  build:
     needs: test_train
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: consumer
@@ -98,11 +99,7 @@ jobs:
         run: >-
           docker run --rm --entrypoint python "$IMAGE_NAME:$PREFIX$GITHUB_SHA"
           -c 'from pathlib import Path; p=Path("/app"); assert not any(x.name == ".git" or x.name.startswith(".env") or x.suffix in (".pem", ".key") for x in p.rglob("*"))'
-      - name: Scan image with checksum-verified Trivy
-        env:
-          PREFIX: ${{ matrix.prefix }}
-        run: bash scripts/scan_image.sh "$IMAGE_NAME:$PREFIX$GITHUB_SHA"
-      - name: Save only scanned images for publication
+      - name: Save candidate image for scanning and integration
         env:
           PREFIX: ${{ matrix.prefix }}
         run: docker save "$IMAGE_NAME:$PREFIX$GITHUB_SHA" -o image.tar
@@ -111,8 +108,46 @@ jobs:
           name: image-${{ matrix.name }}
           path: image.tar
           retention-days: 1
+  security_scan:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: image-*
+          path: images
+      - name: Scan all application candidates
+        run: |
+          for archive in images/*/image.tar; do docker load -i "$archive"; done
+          mkdir -p scan-reports
+          result=0
+          for prefix in '' raspi-simulator- ia-consumer- nodered-; do
+            bash scripts/scan_image.sh "$IMAGE_NAME:$prefix$GITHUB_SHA" "scan-reports/${prefix}application.json" || result=1
+          done
+          exit "$result"
+      - name: Scan core platform images
+        if: always()
+        run: |
+          mkdir -p scan-reports
+          result=0
+          for app in influxdb grafana; do
+            image="$(awk '$1 == "image:" {print $2; exit}' "k3s/$app-deploy.yaml")"
+            bash scripts/scan_image.sh "$image" "scan-reports/$app.json" || result=1
+          done
+          image="$(awk -F "'" '/^BROKER_IMAGE =/ {print $2}' scripts/integration_test.py)"
+          bash scripts/scan_image.sh "$image" scan-reports/broker.json || result=1
+          exit "$result"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: security-scan-reports
+          path: scan-reports/
   integration:
-    needs: build_scan
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -131,7 +166,7 @@ jobs:
           for archive in images/*/image.tar; do docker load -i "$archive"; done
           python scripts/integration_test.py "$GITHUB_SHA"
   publish:
-    needs: [build_scan, integration]
+    needs: [build, security_scan, integration]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
