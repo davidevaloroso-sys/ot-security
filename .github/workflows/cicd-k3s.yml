@@ -35,6 +35,13 @@ jobs:
           npm ci --ignore-scripts
           npm test
           npm audit --omit=dev --audit-level=high
+      - name: Validate locked Node-RED runtime
+        env:
+          NODE_RED_RUNTIME: ${{ github.workspace }}/platform/nodered/runtime/node_modules/node-red/red.js
+        run: |
+          npm ci --ignore-scripts --prefix platform/nodered/runtime
+          npm audit --omit=dev --audit-level=high --prefix platform/nodered/runtime
+          node platform/nodered/test/runtime.cjs
       - run: bash scripts/validate_config.sh
       - run: bash scripts/run_tests.sh
       - run: bash scripts/run_sast.sh
@@ -98,7 +105,7 @@ jobs:
           PREFIX: ${{ matrix.prefix }}
         run: >-
           docker run --rm --entrypoint python "$IMAGE_NAME:$PREFIX$GITHUB_SHA"
-          -c 'from pathlib import Path; p=Path("/app"); assert not any(x.name == ".git" or x.name.startswith(".env") or x.suffix in (".pem", ".key") for x in p.rglob("*"))'
+          -c 'from pathlib import Path; p=Path("/app"); assert not any(x.name in (".git", "kubeconfig") or x.name.startswith(".env") or x.suffix in (".pem", ".key", ".env", ".pfx", ".p12", ".kubeconfig") for x in p.rglob("*"))'
       - name: Save candidate image for scanning and integration
         env:
           PREFIX: ${{ matrix.prefix }}

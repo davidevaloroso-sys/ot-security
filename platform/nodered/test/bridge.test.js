@@ -65,3 +65,25 @@ test("disconnect cancels the old database retry without acknowledging input", as
     assert.equal(attempts, stoppedAt);
     assert.equal(bridge.state.written, 0);
 });
+test("persistent MQTT session redelivers after a socket break during a failed write", async t => {
+    const broker=aedes();const server=net.createServer(broker.handle);
+    server.listen(0,'127.0.0.1');await once(server,'listening');
+    let writes=0,acks=0,connections=0;
+    broker.on('ack',(_packet,client)=>{if(client.id==='reconnect-ingest')acks++;});
+    broker.on('client',client=>{if(client.id==='reconnect-ingest')connections++;});
+    const influx=http.createServer((req,res)=>{req.resume();req.on('end',()=>{
+        writes++;
+        if(writes===1){res.writeHead(503).end();setTimeout(()=>broker.clients['reconnect-ingest']?.conn.destroy(),20);}
+        else {assert(connections>=2,'Old connection must not continue retries');res.writeHead(204).end();}
+    });});
+    influx.listen(0,'127.0.0.1');await once(influx,'listening');
+    const config=configuration({MQTT_BROKER:'127.0.0.1',MQTT_PORT:server.address().port,MQTT_TLS:'false',MQTT_ALLOW_INSECURE_LOCAL:'true',MQTT_USERNAME:'test',MQTT_PASSWORD:'test-only',MQTT_CLIENT_ID:'reconnect-ingest',INFLUXDB_URL:`http://127.0.0.1:${influx.address().port}`,INFLUXDB_ORG:'lab',INFLUXDB_BUCKET:'ot',INFLUXDB_TOKEN:'test-only'});
+    config.options.reconnectPeriod=100;
+    const bridge=new Bridge(config).start();
+    const publisher=mqtt.connect({host:'127.0.0.1',port:server.address().port});
+    t.after(async()=>{await publisher.endAsync(true);await bridge.close();await new Promise(r=>broker.close(r));server.close();influx.close();});
+    await once(publisher,'connect');await until(()=>bridge.state.subscribed);
+    await publisher.publishAsync(TEMPERATURE,JSON.stringify({device:'raspi1',value:25,unit:'C',ts:1760000000}),{qos:1});
+    await until(()=>acks===1);
+    assert.equal(bridge.state.written,1);assert.equal(writes,2);assert.equal(bridge.ready,true);
+});

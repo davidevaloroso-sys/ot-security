@@ -6,9 +6,16 @@ __pycache__/
 training_metrics.json
 bandit-reports/
 .env*
+*.env
+*.p12
+*.pfx
+*.kubeconfig
+kubeconfig
 *.pem
 *.key
 secrets/
 rendered/
 node_modules/
 test-results/
+scan-reports/
+scan-report.json

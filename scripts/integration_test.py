@@ -152,9 +152,14 @@ def run(revision):
             query='from(bucket:"ot") |> range(start:-1h, stop:1h) |> filter(fn:(r)=>r._measurement=="ot_anomaly")'
             query_url=influx+'/api/v2/query?org=lab'
             until(lambda: b'integration' in request(query_url,tokens['grafana'],{'query':query})[1],'Inference alert persisted in InfluxDB')
-            assert request(query_url,tokens['nodered'],{'query':query})[0] in (401,403),'Write token must not query'
+            denied_status,denied_body=request(query_url,tokens['nodered'],{'query':query})
+            # InfluxDB deliberately hides buckets from tokens without read permission.
+            hidden_bucket=(denied_status==404 and b'bucket' in denied_body.lower()
+                           and (b'not found' in denied_body.lower() or b'could not find' in denied_body.lower()))
+            assert denied_status in (401,403) or hidden_bucket,f'Write token query not denied (HTTP {denied_status})'
             assert request(influx+'/api/v2/write?org=lab&bucket=ot',tokens['grafana'],b'x value=1','text/plain')[0] in (401,403),'Read token must not write'
-            assert request(influx+'/api/v2/authorizations',tokens['nodered'])[0] in (401,403),'Write token must not administer tokens'
+            org_id=json.loads(request(influx+'/api/v2/orgs?org=lab',admin_token)[1])['orgs'][0]['id']
+            assert request(influx+'/api/v2/authorizations',tokens['nodered'],{'orgID':org_id,'permissions':[{'action':'read','resource':{'type':'buckets','orgID':org_id}}]})[0] in (401,403),'Write token must not create authorizations'
             stack.start('simulator',image+'raspi-simulator-'+revision,env={**common,'MQTT_USERNAME':'raspi-simulator','PUBLISH_INTERVAL':'1'},mounts=ca_mount)
             mounts=((ROOT/'platform/grafana/datasource.yaml','/etc/grafana/provisioning/datasources/ot.yaml'),(ROOT/'platform/grafana/provider.yaml','/etc/grafana/provisioning/dashboards/ot.yaml'),(ROOT/'platform/grafana/ot-security.json','/etc/grafana/ot-dashboards/ot-security.json'))
             stack.start('grafana',platform_image('grafana'),env={'GF_SECURITY_ADMIN_USER':'testadmin','GF_SECURITY_ADMIN_PASSWORD':password,'GF_AUTH_ANONYMOUS_ENABLED':'false','INFLUXDB_ORG':'lab','INFLUXDB_BUCKET':'ot','INFLUXDB_READ_TOKEN':tokens['grafana']},ports=(3000,),mounts=mounts)
