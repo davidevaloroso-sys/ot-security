@@ -46,14 +46,14 @@ jobs:
         run: |
           python train_model.py
           python -c "import mqtt_anomaly_consumer as app; app.load_model()"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: validation-reports
           path: |
             bandit-reports/
             IA-integration/ia-consumer/training_metrics.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trained-model
           if-no-files-found: error
@@ -103,7 +103,7 @@ jobs:
         env:
           PREFIX: ${{ matrix.prefix }}
         run: docker save "$IMAGE_NAME:$PREFIX$GITHUB_SHA" -o image.tar
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: image-${{ matrix.name }}
           path: image.tar
@@ -141,7 +141,7 @@ jobs:
           image="$(awk -F "'" '/^BROKER_IMAGE =/ {print $2}' scripts/integration_test.py)"
           bash scripts/scan_image.sh "$image" scan-reports/broker.json || result=1
           exit "$result"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: security-scan-reports
