@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nodered-admin-ingress
+  namespace: ot-namespace
+spec:
+  podSelector:
+    matchLabels:
+      app: nodered
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          access-nodered: 'true'
+    ports:
+    - port: 1880
+      protocol: TCP

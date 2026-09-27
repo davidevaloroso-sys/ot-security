@@ -1,0 +1,14 @@
+# These usernames must match the separately provisioned broker accounts.
+user raspi-simulator
+ topic write lab/raspi1/temperature
+ topic write lab/raspi1/humidity
+user ia-consumer
+ topic read lab/raspi1/temperature
+ topic read lab/raspi1/humidity
+ topic write lab/raspi1/anomaly
+user ot-mqtt-consumer
+ topic read lab/#
+user nodered
+ topic read lab/raspi1/temperature
+ topic read lab/raspi1/humidity
+ topic read lab/raspi1/anomaly

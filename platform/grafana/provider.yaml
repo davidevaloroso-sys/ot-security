@@ -1,0 +1,11 @@
+apiVersion: 1
+providers:
+  - name: OT Security
+    orgId: 1
+    folder: OT Security
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/ot-dashboards

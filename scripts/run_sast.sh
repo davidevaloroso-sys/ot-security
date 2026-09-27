@@ -5,16 +5,10 @@ REPORT_DIR="bandit-reports"
 EXCLUDES=".git,.venv,__pycache__,.github,k3s,tests"
 TARGETS=(
   "main.py"
+  "ot_common.py"
   "IA-integration/ia-consumer"
   "IA-integration/raspi-simulator"
 )
-
-echo "[*] Preparing Python virtual environment"
-python -m venv .venv
-source .venv/bin/activate
-
-python -m pip install --upgrade pip
-pip install bandit
 
 mkdir -p "${REPORT_DIR}"
 

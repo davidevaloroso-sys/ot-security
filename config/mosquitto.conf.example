@@ -1,0 +1,12 @@
+# Mosquitto 2.x example; adapt paths, permissions and certificate SAN to the lab.
+# This is a reference for the existing external Ubuntu broker, not a new deployment.
+per_listener_settings true
+persistence true
+persistence_location /var/lib/mosquitto/
+listener 8883
+allow_anonymous false
+password_file /etc/mosquitto/passwd
+acl_file /etc/mosquitto/acl
+certfile /etc/mosquitto/certs/server.crt
+keyfile /etc/mosquitto/certs/server.key
+tls_version tlsv1.2

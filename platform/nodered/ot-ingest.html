@@ -1,0 +1,13 @@
+<script type="text/javascript">
+RED.nodes.registerType('ot-ingest', {
+    category: 'network', color: '#83b5bf', defaults: {name: {value: 'OT telemetry to InfluxDB'}},
+    inputs: 0, outputs: 1, icon: 'bridge.svg', label: function() { return this.name; }
+});
+</script>
+<script type="text/html" data-template-name="ot-ingest">
+    <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+</script>
+<script type="text/html" data-help-name="ot-ingest">
+    <p>Validates temperature, humidity and anomaly events. Writes to InfluxDB before acknowledging QoS 1 input.</p>
+    <p>Credentials and TLS CA are supplied through the deployment environment. Output contains persistence status, never tokens or passwords.</p>
+</script>

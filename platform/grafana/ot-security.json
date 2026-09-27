@@ -1,0 +1,22 @@
+{
+  "uid": "ot-security",
+  "title": "OT Security · Telemetry & Anomalies",
+  "description": "Live telemetry and model alerts persisted through authenticated Node-RED ingestion. No data means no persisted readings, not a healthy sensor.",
+  "tags": ["OT", "security", "MQTT"],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": {"from": "now-1h", "to": "now"},
+  "annotations": {"list": []},
+  "templating": {"list": []},
+  "panels": [
+    {"id":1,"type":"text","title":"Lab scope","gridPos":{"x":0,"y":0,"w":24,"h":3},"options":{"mode":"markdown","content":"**OT Security Lab** · MQTT TLS → Node-RED validation → InfluxDB → Grafana.\n\nModel alerts are experimental classifications of single readings, not safety decisions. Empty panels or stale timestamps require investigation; the dashboard does not prove the physical process is safe."}},
+    {"id":2,"type":"timeseries","title":"Temperature · °C","datasource":{"type":"influxdb","uid":"ot-influxdb"},"gridPos":{"x":0,"y":3,"w":12,"h":8},"targets":[{"refId":"A","query":"from(bucket: v.defaultBucket) |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"ot_telemetry\" and r.kind == \"temperature\" and r._field == \"value\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"}],"fieldConfig":{"defaults":{"unit":"celsius","custom":{"drawStyle":"line","lineWidth":2,"fillOpacity":10,"spanNulls":false}},"overrides":[]},"options":{"legend":{"displayMode":"list","placement":"bottom"},"tooltip":{"mode":"multi"}}},
+    {"id":3,"type":"timeseries","title":"Humidity · %","datasource":{"type":"influxdb","uid":"ot-influxdb"},"gridPos":{"x":12,"y":3,"w":12,"h":8},"targets":[{"refId":"A","query":"from(bucket: v.defaultBucket) |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"ot_telemetry\" and r.kind == \"humidity\" and r._field == \"value\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"}],"fieldConfig":{"defaults":{"unit":"percent","custom":{"drawStyle":"line","lineWidth":2,"fillOpacity":10,"spanNulls":false}},"overrides":[]},"options":{"legend":{"displayMode":"list","placement":"bottom"},"tooltip":{"mode":"multi"}}},
+    {"id":4,"type":"stat","title":"Persisted model alerts · selected interval","datasource":{"type":"influxdb","uid":"ot-influxdb"},"gridPos":{"x":0,"y":11,"w":8,"h":5},"targets":[{"refId":"A","query":"from(bucket: v.defaultBucket) |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"ot_anomaly\" and r._field == \"score\") |> group() |> count()"}],"fieldConfig":{"defaults":{"unit":"short","noValue":"No alerts recorded"},"overrides":[]},"options":{"reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":false},"colorMode":"value","graphMode":"none"}},
+    {"id":5,"type":"stat","title":"Latest persisted reading · per sensor","datasource":{"type":"influxdb","uid":"ot-influxdb"},"gridPos":{"x":8,"y":11,"w":16,"h":5},"targets":[{"refId":"A","query":"from(bucket: v.defaultBucket) |> range(start: -24h) |> filter(fn: (r) => r._measurement == \"ot_telemetry\" and r._field == \"value\") |> last() |> map(fn: (r) => ({r with _value: float(v: uint(v: r._time)) / 1000000.0}))"}],"fieldConfig":{"defaults":{"unit":"dateTimeAsIso","noValue":"No telemetry in last 24h"},"overrides":[]},"options":{"reduceOptions":{"calcs":["lastNotNull"],"fields":"","values":false},"graphMode":"none"}},
+    {"id":6,"type":"table","title":"Model alert history","datasource":{"type":"influxdb","uid":"ot-influxdb"},"gridPos":{"x":0,"y":16,"w":24,"h":9},"targets":[{"refId":"A","query":"from(bucket: v.defaultBucket) |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"ot_anomaly\") |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") |> group() |> sort(columns: [\"_time\"], desc: true) |> limit(n: 200) |> keep(columns: [\"_time\", \"device\", \"kind\", \"value\", \"unit\", \"score\", \"event_id\"])"}],"fieldConfig":{"defaults":{"custom":{"align":"auto","displayMode":"auto"}},"overrides":[]},"options":{"showHeader":true}}
+  ]
+}

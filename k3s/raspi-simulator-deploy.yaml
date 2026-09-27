@@ -14,36 +14,99 @@ spec:
         app: raspi-simulator
     spec:
       containers:
-        - name: raspi-simulator
-          image: ghcr.io/davidevaloroso-sys/ot-security:raspi-simulator-latest
-          imagePullPolicy: Always
-          env:
-            - name: MQTT_BROKER
-              value: "192.168.1.21"
-            - name: MQTT_PORT
-              value: "1883"
-            - name: MQTT_CLIENT_ID
-              value: "raspi-simulator-1"
-            - name: MQTT_TOPIC_TEMP
-              value: "lab/raspi1/temperature"
-            - name: MQTT_TOPIC_HUM
-              value: "lab/raspi1/humidity"
-            - name: PUBLISH_INTERVAL
-              value: "5"
-            - name: MQTT_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: mqtt-credentials
-                  key: username
-            - name: MQTT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mqtt-credentials
-                  key: password
-          resources:
-            requests:
-              cpu: "20m"
-              memory: "64Mi"
-            limits:
-              cpu: "100m"
-              memory: "128Mi"
+      - name: raspi-simulator
+        image: ghcr.io/davidevaloroso-sys/ot-security:raspi-simulator-RELEASE_SHA
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: MQTT_BROKER
+          valueFrom:
+            configMapKeyRef:
+              name: mqtt-config
+              key: broker
+        - name: MQTT_PORT
+          value: '8883'
+        - name: MQTT_CLIENT_ID
+          value: raspi-simulator-1
+        - name: MQTT_TOPIC_TEMP
+          value: lab/raspi1/temperature
+        - name: MQTT_TOPIC_HUM
+          value: lab/raspi1/humidity
+        - name: PUBLISH_INTERVAL
+          value: '5'
+        - name: MQTT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mqtt-raspi-simulator
+              key: username
+        - name: MQTT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mqtt-raspi-simulator
+              key: password
+        - name: MQTT_TLS
+          value: 'true'
+        - name: MQTT_CA_FILE
+          value: /etc/mqtt/ca.crt
+        - name: HEALTH_DIR
+          value: /run/ot-health
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: mqtt-ca
+          mountPath: /etc/mqtt
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: health
+          mountPath: /run/ot-health
+        startupProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - from pathlib import Path; import sys; sys.exit(0 if Path("/run/ot-health/ot-started").exists()
+              else 1)
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 60
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - from pathlib import Path; import sys; sys.exit(0 if Path("/run/ot-health/ot-ready").exists()
+              else 1)
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 2
+      automountServiceAccountToken: false
+      volumes:
+      - name: mqtt-ca
+        configMap:
+          name: mqtt-ca
+      - name: tmp
+        emptyDir:
+          sizeLimit: 16Mi
+      - name: health
+        emptyDir:
+          sizeLimit: 1Mi
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+  strategy:
+    type: Recreate

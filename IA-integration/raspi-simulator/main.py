@@ -3,14 +3,14 @@ import logging
 import os
 import random
 import signal
-import sys
 import threading
 import time
 
 import paho.mqtt.client as mqtt
+from ot_common import build_mqtt_client, marker
 
 MQTT_BROKER = os.getenv("MQTT_BROKER")
-MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_PORT = int(os.getenv("MQTT_PORT", "8883"))
 MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 MQTT_CLIENT_ID = os.getenv("MQTT_CLIENT_ID", "raspi-simulator-1")
@@ -40,7 +40,8 @@ signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
 
 
-def on_connect(client, userdata, flags, rc, properties=None):
+def on_connect(client, userdata, flags, rc, properties):
+    marker("ready", rc == 0)
     if rc == 0:
         connected.set()
         logger.info(
@@ -63,7 +64,8 @@ def on_connect_fail(client, userdata):
     )
 
 
-def on_disconnect(client, userdata, rc, properties=None):
+def on_disconnect(client, userdata, flags, rc, properties):
+    marker("ready", False)
     connected.clear()
     if rc == 0:
         logger.info("MQTT disconnected cleanly")
@@ -75,15 +77,9 @@ def build_client():
     if not MQTT_BROKER:
         raise RuntimeError("MQTT_BROKER environment variable is required")
 
-    client = mqtt.Client(
-        mqtt.CallbackAPIVersion.VERSION1,
-        client_id=MQTT_CLIENT_ID,
-        protocol=mqtt.MQTTv311,
-    )
-    client.reconnect_delay_set(min_delay=1, max_delay=30)
-
-    if MQTT_USERNAME and MQTT_PASSWORD:
-        client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+    if PUBLISH_INTERVAL <= 0 or MQTT_CONNECT_TIMEOUT <= 0:
+        raise ValueError("PUBLISH_INTERVAL and MQTT_CONNECT_TIMEOUT must be positive")
+    client = build_mqtt_client("raspi-simulator-1")
 
     client.on_connect = on_connect
     client.on_connect_fail = on_connect_fail
@@ -132,6 +128,9 @@ def publish_loop(client):
                 MQTT_PORT,
             )
             continue
+
+        if stop:
+            break
 
         temp = round(random.uniform(normal_temp_min, normal_temp_max), 1)
         hum = round(random.uniform(normal_hum_min, normal_hum_max), 1)
@@ -202,6 +201,8 @@ def publish_loop(client):
 
 
 def main():
+    marker("ready", False)
+    marker("started", False)
     client = build_client()
 
     logger.info(
@@ -214,14 +215,15 @@ def main():
 
     client.connect_async(MQTT_BROKER, MQTT_PORT, keepalive=60)
     client.loop_start()
+    marker("started", True)
 
     try:
         publish_loop(client)
     finally:
-        client.loop_stop()
+        marker("ready", False)
         client.disconnect()
+        client.loop_stop()
         logger.info("Simulator stopped")
-        sys.exit(0)
 
 
 if __name__ == "__main__":

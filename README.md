@@ -1,497 +1,173 @@
-# OT Security Lab on Ubuntu Server + K3s
-```mermaid
-flowchart TD
-  A[GitHub Actions] --> B[WireGuard tunnel]
-  B --> C[K3s API Server<br/>192.168.1.21:6443]
+# OT Security — laboratorio MQTT, IA e osservabilità
 
-  C --> D[Apply manifests]
-  D --> E[Create / Update Deployments]
-
-  E --> F[raspi-simulator Pod]
-  E --> G[ot-mqtt-consumer Pod]
-  E --> H[ia-consumer Pod]
-
-  F --> I[MQTT Broker on Ubuntu Master<br/>192.168.1.21:1883]
-  G --> I
-  J[mosquitto_sub on Master] --> I
-```
-## 1. Descrizione generale
-Questo repository documenta un laboratorio tecnico costruito su **Ubuntu Server** e **K3s**, progettato come piattaforma reale per attività di cybersecurity, DevSecOps, automazione infrastrutturale, simulazione OT/IoT e futura integrazione con componenti di monitoring e SIEM. L'ambiente non nasce come test isolato, ma come base operativa modulare su cui validare configurazioni di rete, orchestrazione di servizi containerizzati, flussi dati MQTT e controlli di sicurezza applicabili a use case di laboratorio e proof-of-concept.
-
-L'architettura attuale prevede un cluster K3s composto da **1 master** e **1 worker**, con possibilità di espansione futura. Il nodo master è già configurato con indirizzo IP statico **192.168.1.21/24** sull'interfaccia **ens33** tramite **Netplan**. Nel laboratorio è già presente anche un **Raspberry Pi simulato / sensor node**, implementato per generare valori random e inviarli a un **broker MQTT**, così da simulare un endpoint OT/IoT all'interno del flusso dati del progetto.
-
-## 2. Obiettivi del laboratorio
-Gli obiettivi principali del laboratorio sono i seguenti:
-
-- Costruire una base Kubernetes leggera e riproducibile usando K3s.
-- Disporre di un'infrastruttura minima ma reale per testare workflow DevSecOps.
-- Simulare componenti OT/IoT attraverso un sensor node software-based.
-- Preparare il progetto a pipeline CI/CD, automazione e controlli di sicurezza.
-- Predisporre il contesto tecnico per logging centralizzato, monitoring e futura integrazione SIEM.
-- Mantenere una struttura repository ordinata, estendibile e orientata a sperimentazione professionale.
-
-## 3. Architettura completa
-L'architettura del laboratorio è composta da più livelli logici che cooperano tra loro:
-
-1. **Infrastructure layer**: Ubuntu Server come base del nodo master e cluster K3s come piano di orchestrazione.
-2. **Cluster layer**: 1 nodo master e 1 nodo worker, con estensione prevista in futuro.
-3. **Application / simulation layer**: componenti containerizzati, script operativi e simulatore Raspberry Pi / sensor node.
-4. **Messaging layer**: broker MQTT come punto di raccolta dei dati provenienti dal sensore simulato.
-5. **Security / observability layer**: area progettuale destinata a CI/CD, security checks, monitoring e futura integrazione SIEM.
-
-### Vista logica
-```text
-+-----------------------------------------------------------+
-|                    OT Security Lab                        |
-+-----------------------------------------------------------+
-| Ubuntu Server                                             |
-| └── K3s Cluster                                           |
-|     ├── Master node (static IP 192.168.1.21/24 - ens33)   |
-|     └── Worker node                                       |
-|                                                           |
-| Simulated Raspberry Pi / Sensor Node                      |
-| └── Random data generator                                 |
-|     └── MQTT publish ---> Broker MQTT                     |
-|                                                           |
-| Repository assets                                         |
-| ├── k3s/                                                  |
-| ├── scripts/                                              |
-| ├── Dockerfile                                            |
-| ├── main.py / main-2.py                                   |
-| ├── requirements.txt                                      |
-| └── cicd-k3s.yml                                          |
-|                                                           |
-| Planned layers                                            |
-| ├── CI/CD hardening                                       |
-| ├── Security controls                                     |
-| ├── Monitoring                                            |
-| └── Future SIEM integration                               |
-+-----------------------------------------------------------+
-```
-
-## 4. Topologia del cluster K3s
-Il cluster è attualmente definito con una topologia semplice ma funzionale, pensata per essere stabile, chiara e facilmente espandibile:
-
-- **1 master node**: nodo di controllo del cluster.
-- **1 worker node**: nodo destinato all'esecuzione di workload e test operativi.
-- **Espansione futura**: possibilità di aggiungere ulteriori worker o componenti specializzati.
-
-TEST PUSH
-
-Questa topologia consente di mantenere bassa la complessità iniziale, pur offrendo già una separazione concreta tra controllo del cluster e capacità computazionale distribuita. È una scelta coerente con un laboratorio orientato a sperimentazione DevSecOps, simulazione di servizi e validazione progressiva di automazioni.
-
-## 5. Dettaglio master e worker
-
-### Master node
-Il master rappresenta il nodo centrale del cluster K3s ed è il punto di riferimento per amministrazione, orchestrazione e verifica operativa. Su questo nodo è già stata completata la configurazione di rete con IP statico tramite Netplan.
-
-**Dettagli confermati del master:**
-- Sistema base: Ubuntu Server.
-- Ruolo: K3s master.
-- Interfaccia: `ens33`.
-- IP statico: `192.168.1.21/24`.
-- Configurazione rete: Netplan.
-
-### Worker node
-È previsto ed è parte della topologia attuale del laboratorio come secondo nodo del cluster. Non sono stati forniti in questa fase dettagli tecnici aggiuntivi sul sistema operativo, IP, naming o configurazione del worker, quindi tali informazioni non vengono inventate e restano da documentare in modo puntuale nel repository quando disponibili.
-
-## 6. Configurazione di rete del master
-La rete del master è stata configurata in modalità statica per garantire stabilità del nodo di controllo e continuità operativa dei servizi cluster. In un laboratorio DevSecOps o OT-oriented, mantenere un endpoint stabile per il control plane è fondamentale per automazioni, collegamento dei nodi, troubleshooting, inventory e futura integrazione con sistemi di raccolta log o monitoraggio.
-
-### Parametri confermati
-- Interfaccia di rete: `ens33`
-- Indirizzo IP: `192.168.1.21/24`
-- Tipo di configurazione: statica
-- Metodo di gestione: Netplan
-
-### Verifica IP e interfaccia
-```bash
-ip addr show ens33
-ip -4 addr show ens33
-hostname -I
-ip route
-```
-
-### Verifica connettività di base
-```bash
-ping -c 4 127.0.0.1
-ping -c 4 192.168.1.21
-ip neigh
-```
-
-## VPN WireGuard, Port Mapping, DDNS e integrazione con GitHub Actions
-Per estendere l’accessibilità del laboratorio anche da contesti esterni e supportare workflow di automazione remota, il nodo master K3s ospita anche il servizio WireGuard, esposto direttamente dalla rete domestica tramite port forwarding sul router. In questa configurazione, la porta 51820/UDP viene inoltrata dal router casalingo verso l’indirizzo IP privato del master 192.168.1.21, che rappresenta il punto di terminazione VPN del laboratorio.
-
-Questa scelta consente di mantenere il master come nodo centrale non solo del cluster K3s, ma anche del piano di accesso sicuro all’infrastruttura, semplificando l’interazione remota con il laboratorio e fornendo una base solida per operazioni automatizzate, deploy controllati e collegamenti da pipeline esterne. WireGuard utilizza comunemente la porta 51820/UDP e richiede che il router consenta l’inoltro del traffico in ingresso verso l’host interno corretto.
-
-### Architettura della connettività VPN
-L’architettura della connettività remota si basa sui seguenti elementi:
-
-- Nodo master K3s: endpoint VPN interno sulla rete locale.
-- Router casalingo: gestisce il port mapping dalla rete pubblica verso 192.168.1.21.
-- WireGuard: servizio VPN terminato direttamente sul master.
-- Duck DNS: risoluzione del nome DNS pubblico verso l’IP dinamico della connessione domestica.
-- GitHub Actions: workflow remoti che possono utilizzare endpoint, chiavi e parametri VPN tramite secret di repository.
-
-### Port forwarding sul router
-Per rendere il servizio WireGuard raggiungibile dall’esterno, il router domestico deve inoltrare il traffico UDP 51820 verso il master del laboratorio. La regola di port mapping è quindi concettualmente la seguente:
+Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. Il server K3s e il broker esterno restano **192.168.1.12**. Il deploy del cluster è disabilitato in CI fino al collaudo concordato con il proprietario della VM.
 
 ```text
-WAN UDP 51820  --->  192.168.1.21:51820/UDP
+Simulatore ── MQTT TLS/QoS1 ── broker esterno :8883
+                                ├─ audit Python (metadati)
+                                ├─ IA Python ── topic anomaly ─┐
+                                └─ Node-RED <──────────────────┘
+                                     │ token write sul bucket
+                                     ▼
+                                  InfluxDB
+                                     ▲ token read sul bucket
+                                     │
+                                  Grafana
 ```
 
-Questa configurazione permette al nodo master di ricevere i pacchetti WireGuard provenienti da peer esterni, inclusi eventuali client amministrativi o workflow automatizzati che devono interagire in modo sicuro con l’ambiente di laboratorio. In questo modello, il master resta il punto di ingresso controllato per la connettività privata verso il cluster e verso i servizi interni esposti solo tramite VPN.
+Il laboratorio rileva anomalie su singole letture simulate. Non controlla attuatori e non certifica la sicurezza di un processo industriale. OpenPLC è un componente opzionale isolato; non c'è un programma PLC né una sorgente Modbus collegata al simulatore.
 
-### Risoluzione IP dinamico con Duck DNS
-Poiché il laboratorio è ospitato dietro una connessione domestica con IP pubblico dinamico, la raggiungibilità esterna non può basarsi in modo affidabile su un indirizzo IP statico. Per questo motivo viene utilizzato Duck DNS come meccanismo di Dynamic DNS, così da associare un hostname stabile all’indirizzo IP pubblico aggiornato del laboratorio.
+## Componenti effettivi
 
-L’aggiornamento del record Duck DNS viene gestito sul master tramite uno script richiamato periodicamente da crontab, in modo da mantenere allineata la risoluzione DNS anche in caso di cambio IP da parte dell’ISP. Questo approccio è particolarmente utile per consentire a GitHub Actions o ad altri peer remoti di raggiungere sempre il laboratorio usando un endpoint stabile invece di un IP hardcoded.
+| Percorso | Comportamento |
+|---|---|
+| `main.py` | Consumer audit: registra topic, dimensione e QoS, senza payload o credenziali |
+| `IA-integration/raspi-simulator/` | Pubblica temperatura e umidità, incluse letture anomale simulate |
+| `IA-integration/ia-consumer/` | Training riproducibile, verifica modello, inferenza e allarmi con ID deterministico |
+| `platform/nodered/` | Nodo e flusso versionati: MQTT → validazione → scrittura InfluxDB → PUBACK |
+| `platform/grafana/` | Datasource Flux `ot-influxdb`, dashboard `ot-security`, cinque pannelli dati e pannello descrittivo |
+| `k3s/` | Sei deployment singleton, PVC, servizi interni e NetworkPolicy |
+| `scripts/` | Bootstrap, token limitati, preflight, renderer e collaudo Docker completo |
 
-### Esempio di aggiornamento DDNS
-Uno schema tecnico tipico per l’aggiornamento DDNS lato host Linux può essere il seguente:
+Grafana visualizza temperatura, umidità, conteggio degli allarmi nell'intervallo scelto, timestamp dell'ultima lettura per sensore e tabella eventi. Nessun dato non equivale a un sensore sano. Flussi e dashboard sono gestiti dal repository: le modifiche passano da revisione, test e rilascio. L'editor Node-RED richiede login e il runtime è in modalità `readOnly`.
+
+## Contratto e consegna
+
+Topic: `lab/raspi1/temperature` (`C`), `lab/raspi1/humidity` (`%`), `lab/raspi1/anomaly` (risultato IA con topic originale).
+
+```json
+{"device":"raspi1","ts":1760000000,"value":25.4,"unit":"C","in_range":true,"alert":null}
+```
+
+Payload JSON UTF-8 fino a 16 KiB: `device` contiene 1–128 lettere ASCII, cifre o `_.:-`; `ts` è un intero Unix in secondi da 0 a 9223372036; `value` è finito; l'unità corrisponde al topic. `in_range` è booleano opzionale, `alert` stringa su una riga fino a 128 caratteri o null. IA e Node-RED scartano messaggi invalidi con un log senza payload. Non modificare topic di un solo componente: il contratto è condiviso con i flussi e il dashboard.
+
+MQTT usa TLS verificato, minimo 1.2, QoS1 e sessioni persistenti. Ogni ruolo ha ClientId stabile distinto. I deployment `Recreate` evitano sovrapposizioni: non aumentare le repliche senza riprogettare sessioni e distribuzione del carico. Il broker deve mantenere la persistenza e code dimensionate per i guasti previsti.
+
+L'IA conferma l'ingresso dopo l'elaborazione e, per gli allarmi, dopo il PUBACK del broker. Node-RED conferma solo dopo HTTP 204 di InfluxDB. Durante un errore DB ritenta con backoff; una disconnessione annulla il tentativo della vecchia connessione, lasciando la riconsegna al broker. I messaggi malformati sono confermati e scartati per non bloccare la coda. QoS1 può duplicare consegne: InfluxDB usa measurement/tag/timestamp per riscrivere lo stesso punto. Due letture dello stesso sensore/tipo nello stesso secondo **si sovrascrivono**: il contratto attuale è per sensori a bassa frequenza. `event_id` resta un campo, non un tag ad alta cardinalità.
+
+Non c'è garanzia contro perdita del disco del broker o della persistenza MQTT. La readiness Node-RED richiede connessione, sottoscrizioni e almeno una scrittura riuscita; non è un controllo di freschezza continuo. La dashboard espone il timestamp per individuare una sorgente ferma. I client non hanno liveness dipendente dal broker, per evitare riavvii collettivi durante un guasto.
+
+## Secret: riferimenti conservati e aggiunte approvate
+
+Nessun valore segreto è incluso. Preparare file `nome-secret.env` con righe `KEY=value`, senza apici shell, in directory protetta esterna al checkout. Non inviare valori in chat. I nomi seguenti sono quelli letti dai manifest:
+
+| Secret | Chiavi | Uso |
+|---|---|---|
+| `mqtt-credentials` | `username`, `password` | Riferimento originale del consumer audit |
+| `observability-secrets` | `INFLUXDB_ADMIN_USER`, `INFLUXDB_ADMIN_PASSWORD`, `INFLUXDB_ADMIN_TOKEN`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | Riferimento originale, bootstrap DB e amministrazione Grafana |
+| `mqtt-raspi-simulator` | `username`, `password` | Nuovo account producer |
+| `mqtt-ia-consumer` | `username`, `password` | Nuovo account IA |
+| `mqtt-nodered` | `username`, `password` | Nuovo account lettore MQTT |
+| `nodered-auth` | `NODE_RED_ADMIN_USER`, `NODE_RED_ADMIN_PASSWORD_HASH`, `NODE_RED_CREDENTIAL_SECRET`, `INFLUXDB_WRITE_TOKEN` | Nuovi login bcrypt, cifratura stabile e token solo scrittura |
+| `grafana-influxdb` | `INFLUXDB_READ_TOKEN` | Nuovo token solo lettura |
+
+Restano invariati i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY`, `WG_ENDPOINT`, `K3S_KUBECONFIG`. Nessun nuovo `WG_CLIENT_CONFIG` è richiesto. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
+
+## Preparazione del broker esterno
+
+Usare `config/mosquitto.conf.example` e `config/mosquitto.acl.example` come riferimenti per il broker esistente. Creare i quattro account con `mosquitto_passwd` interattivo; adattare gli username nelle ACL ai valori già usati, senza rinominare le credenziali audit esistenti. Producer scrive solo temperatura/umidità; IA legge questi topic e scrive anomaly; Node-RED legge i tre topic; audit legge `lab/#`.
+
+Il certificato deve avere **IP SAN 192.168.1.12** e una CA attendibile. Chiave privata solo sul broker. Distribuire la CA pubblica nel ConfigMap `mqtt-ca`, chiave `ca.crt`. Verificare senza disabilitare TLS:
 
 ```bash
-mkdir -p ~/duckdns
-cat <<'EOF' > ~/duckdns/duck.sh
-#!/bin/bash
-echo url="https://www.duckdns.org/update?domains=<duckdns-domain>&token=<duckdns-token>&ip=" | curl -k -o ~/duckdns/duck.log -K -
-EOF
-
-chmod 700 ~/duckdns/duck.sh
+openssl s_client -connect 192.168.1.12:8883 -CAfile ca.crt -verify_ip 192.168.1.12 -verify_return_error
 ```
 
-Esempio di pianificazione periodica tramite crontab:
+Chiudere 1883 dopo aver migrato tutti i client. Il plaintext è ammesso solo nei test isolati con entrambe `MQTT_TLS=false` e `MQTT_ALLOW_INSECURE_LOCAL=true`; i manifest non lo abilitano.
+
+## Bootstrap e rilascio K3s — da eseguire nel collaudo della VM
+
+Prima di un aggiornamento salvare PVC, database e credenziali. Le immagini passano a Node-RED 5.0.7, Grafana 13.2.2 e InfluxDB 2.9.1: provare la migrazione su copie dei dati. InfluxDB 2.9 memorizza hash dei token; conservarne i valori nel gestore segreti prima dell'upgrade. Un semplice rollback dell'immagine non equivale a ripristinare il database. Il PVC `influxdb-config-pvc` conserva anche la configurazione CLI: includerlo nei backup e limitarne l'accesso.
+
+Servono storage class, immagini GHCR accessibili, CA, broker TLS e kubeconfig verificato per `https://192.168.1.12:6443`. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout.
 
 ```bash
-crontab -e
+export SECRET_DIR='/percorso/protetto/segreti-lab'
+export MQTT_CA_FILE='/percorso/ca.crt'
+bash scripts/bootstrap.sh
 ```
 
-```cron
-*/5 * * * * ~/duckdns/duck.sh >/dev/null 2>&1
-```
+Lo script preserva i Secret già esistenti e crea solo quelli mancanti. Il setup InfluxDB inizializza esclusivamente un volume vuoto: cambiare le env non ruota credenziali di un DB già inizializzato. Non riutilizzare PVC con permessi incompatibili senza una migrazione esplicita: i processi applicativi girano senza root (UID 10001 Python, 1000 Node-RED/InfluxDB, 472 Grafana).
 
-Questo meccanismo consente di mantenere aggiornato l’hostname pubblico del laboratorio con frequenza regolare, riducendo il rischio che un cambio di IP renda irraggiungibile il nodo master dall’esterno.
-
-### Integrazione con GitHub Actions
-L’utilizzo di Duck DNS e WireGuard si integra con l’evoluzione DevSecOps del progetto, perché consente alle GitHub Actions di individuare e raggiungere il laboratorio attraverso un endpoint DNS stabile, senza dipendere da indirizzi IP pubblici fissi. In questo scenario, i workflow CI/CD possono agganciarsi all’infrastruttura usando hostname DDNS, chiavi VPN e credenziali archiviate in modo sicuro nei repository secrets di GitHub.
-
-GitHub consente infatti di memorizzare valori sensibili come chiavi private, token DDNS, endpoint o credenziali applicative nella sezione Secrets and variables > Actions, rendendoli disponibili ai workflow senza esporli nel codice versionato. Questo è coerente con una gestione corretta dei dati sensibili in un repository professionale orientato a sicurezza e automazione.
-
-### Gestione dei secret sensibili
-Le informazioni sensibili relative alla VPN e alla raggiungibilità esterna non devono essere salvate in chiaro nel repository. In particolare, è corretto trattare come secret elementi quali:
-
-- chiavi private WireGuard;
-- chiavi o token associati a Duck DNS;
-- eventuali endpoint o parametri sensibili di connessione;
-- credenziali applicative o variabili usate dalle pipeline;
-- token utilizzati nei workflow GitHub Actions.
-
-Esempio di utilizzo di secret in un workflow GitHub Actions:
-
-```yaml
-env:
-  WG_PRIVATE_KEY: ${{ secrets.WG_PRIVATE_KEY }}
-  WG_SERVER_ENDPOINT: ${{ secrets.WG_SERVER_ENDPOINT }}
-  DUCKDNS_TOKEN: ${{ secrets.DUCKDNS_TOKEN }}
-```
-
-Questo approccio permette al codice di “riagganciarsi” ai valori sensibili senza incorporarli direttamente nei file versionati, mantenendo separazione tra logica applicativa, configurazione operativa e materiale crittografico. La repository resta così pubblicabile o condivisibile senza compromettere chiavi, token o dettagli riservati dell’infrastruttura.
-
-### Ruolo della VPN nel laboratorio
-Dal punto di vista architetturale, la VPN WireGuard non è un semplice accesso remoto aggiuntivo, ma un’estensione del laboratorio che rafforza il progetto in ottica operativa. Essa abilita infatti connettività sicura verso il master, supporta automazioni controllate, facilita scenari di gestione remota e prepara l’ambiente a pipeline più mature, monitoring distribuito e future integrazioni security-oriented.
-
-Inserita nel contesto del repository, questa componente mostra che il laboratorio è progettato come piattaforma realmente utilizzabile, capace di combinare cluster K3s, simulazione OT/IoT, trasporto dati MQTT, accesso remoto sicuro e automazione CI/CD in un’unica architettura coerente.
-
-## 7. Configurazione Netplan e IP statico
-La gestione della rete è stata eseguita con Netplan, che su Ubuntu Server costituisce il metodo standard per definire configurazioni persistenti di interfaccia e routing. Il dato certo da evidenziare è che il master K3s utilizza l'IP statico **192.168.1.21/24** su **ens33**.
-
-### Verifica configurazione Netplan
-```bash
-sudo netplan get
-ls -l /etc/netplan/
-sudo netplan generate
-sudo netplan try
-sudo netplan apply
-```
-
-### Esempio coerente di configurazione
-> Nota: questo esempio mostra la struttura minima coerente con i dati confermati; eventuali gateway, DNS o altre direttive devono essere riportati solo se realmente presenti nell'ambiente.
-
-```yaml
-network:
-  version: 2
-  ethernets:
-    ens33:
-      dhcp4: false
-      addresses:
-        - 192.168.1.21/24
-```
-
-### Controlli post-applicazione
-```bash
-networkctl status ens33
-ip addr show ens33
-ip route
-```
-
-## 8. Raspberry Pi simulato / sensor node
-Uno dei componenti già integrati nel laboratorio è un **Raspberry Pi simulato**, usato come **sensor node** software. Questo elemento è importante perché introduce nell'architettura una sorgente dati dinamica, utile per simulare dispositivi OT/IoT e validare il flusso di telemetria verso un broker MQTT.
-
-Il sensore simulato genera **valori random** e li pubblica tramite MQTT. In termini architetturali, questo componente rappresenta un endpoint field-like che consente di testare:
-
-- emissione periodica di dati;
-- struttura di un producer MQTT;
-- comportamento di un device simulato in laboratorio;
-- flussi applicativi utili a logging, monitoring e security analytics futuri.
-
-Questa parte del progetto è già significativa perché introduce un pattern realistico: generazione dati → pubblicazione sul broker → possibile raccolta, elaborazione o correlazione successiva.
-
-## 9. Flusso dati verso il broker MQTT
-Il flusso dati del Raspberry Pi simulato può essere descritto in modo semplice e funzionale:
-
-1. Il processo applicativo genera valori random.
-2. I valori vengono serializzati secondo la logica implementata nello script Python.
-3. Il client MQTT stabilisce la connessione al broker.
-4. I dati vengono pubblicati su uno o più topic MQTT.
-5. Il broker riceve i messaggi e li rende disponibili a consumer, strumenti di osservabilità o futuri collector di sicurezza.
-
-### Flusso logico
-```text
-[Simulated Raspberry Pi / Sensor Node]
-          |
-          | genera valori random
-          v
-   [Python application]
-          |
-          | publish MQTT
-          v
-      [MQTT Broker]
-          |
-          +--> futuri consumer / logging / monitoring / SIEM
-```
-
-### Esempio realistico di logica applicativa
-Il repository include file applicativi come `main.py` o `main-2.py`; in assenza del contenuto effettivo, il comportamento certo da documentare è che il sensore simulato genera valori casuali e li invia al broker MQTT. Un esempio coerente di esecuzione può essere:
+Aprire un port-forward locale a InfluxDB. In un secondo terminale impostare `INFLUXDB_URL=http://127.0.0.1:8086`, `INFLUXDB_ADMIN_TOKEN`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET` tramite il proprio gestore di segreti:
 
 ```bash
-python3 main.py
+kubectl -n ot-namespace port-forward service/influxdb 8086:8086 --address=127.0.0.1
+# Secondo terminale, dal repository:
+python scripts/provision_influx_tokens.py --output "$SECRET_DIR"
 ```
 
-Un esempio minimale di logica attesa lato Python, coerente con il comportamento dichiarato, può essere il seguente:
-
-```python
-import json
-import random
-import time
-from paho.mqtt import client as mqtt_client
-
-broker = "<MQTT_BROKER_HOST>"
-port = 1883
-topic = "lab/sensors/raspi"
-client_id = f"raspi-sim-{random.randint(1000,9999)}"
-
-client = mqtt_client.Client(client_id=client_id)
-client.connect(broker, port)
-client.loop_start()
-
-while True:
-    payload = {
-        "device": "raspi-sim",
-        "value": random.randint(1, 100),
-        "unit": "generic"
-    }
-    client.publish(topic, json.dumps(payload))
-    time.sleep(5)
-```
-
-> Se il codice reale usa topic, payload o timing differenti, il README deve essere aggiornato in base all'implementazione effettiva del repository.
-
-## 10. Struttura del repository
-In base alle informazioni confermate, il repository include già componenti strutturali e applicativi rilevanti. Una vista sintetica può essere rappresentata così:
-
-```text
-.
-├── k3s/
-├── scripts/
-├── Dockerfile
-├── main.py / main-2.py
-├── requirements.txt
-├── cicd-k3s.yml
-└── README.md
-```
-
-### Ruolo delle directory e dei file principali
-- `k3s/`: directory dedicata ai file legati al cluster, ai manifest o alla configurazione Kubernetes/K3s.
-- `scripts/`: script operativi, di automazione, bootstrap, verifica o supporto al laboratorio.
-- `Dockerfile`: definizione dell'immagine container per componenti applicativi o simulativi del progetto.
-- `main.py` / `main-2.py`: entrypoint applicativo del sensore simulato o di componenti Python correlati.
-- `requirements.txt`: dipendenze Python necessarie all'esecuzione dell'applicazione.
-- `cicd-k3s.yml`: file di pipeline CI/CD orientato all'automazione del progetto.
-- `README.md`: documentazione tecnica principale del repository.
-
-## 11. Componenti già presenti
-Sulla base del contesto disponibile, i componenti già presenti o già integrati nel progetto sono:
-
-- Ubuntu Server come sistema base del laboratorio.
-- Cluster K3s con **1 master** e **1 worker**.
-- Master con IP statico **192.168.1.21/24** su **ens33**.
-- Configurazione di rete del master tramite **Netplan**.
-- Raspberry Pi simulato / sensor node.
-- Generazione di valori random lato sensore simulato.
-- Invio dei dati verso un broker MQTT.
-- Cartella `k3s/`.
-- Cartella `scripts/`.
-- `Dockerfile`.
-- `main.py` oppure `main-2.py`.
-- `requirements.txt`.
-- File CI/CD come `cicd-k3s.yml`.
-
-## 12. Flusso di lavoro attuale
-Il workflow attuale del laboratorio può essere riassunto nelle seguenti fasi operative:
-
-1. Preparazione dell'infrastruttura base su Ubuntu Server.
-2. Configurazione del master K3s con rete statica su `ens33`.
-3. Gestione del cluster con topologia master + worker.
-4. Presenza di componenti repository per Kubernetes, scripting, containerizzazione e pipeline.
-5. Esecuzione del sensore simulato per generazione dati random.
-6. Pubblicazione dei dati verso il broker MQTT.
-7. Preparazione graduale del progetto a osservabilità, automazione, security controls e SIEM.
-
-Questa sequenza mostra che il laboratorio è già oltre la sola fase infrastrutturale: esiste infatti un primo flusso funzionale applicativo e dati, utile a far evolvere il progetto verso scenari più completi di detection, monitoring e security engineering.
-
-## 13. Automazione e CI/CD
-Il repository include già l'intenzione esplicita di evolvere verso una gestione più automatizzata, supportata anche dalla presenza di un file di pipeline come `cicd-k3s.yml`. In questa fase, la pipeline va interpretata come base di lavoro per consolidare processi di build, verifica e deployment controllato.
-
-### Finalità dell'automazione
-- Standardizzare i passaggi operativi del laboratorio.
-- Ridurre errori manuali nelle attività ripetitive.
-- Preparare test, build e deploy in modo coerente.
-- Introdurre progressivamente controlli DevSecOps.
-
-### Ambiti di automazione previsti o coerenti col progetto
-- Build dell'immagine applicativa tramite `Dockerfile`.
-- Installazione dipendenze Python da `requirements.txt`.
-- Verifica sintattica o funzionale degli script.
-- Validazione dei manifest K3s/Kubernetes.
-- Controlli di base sullo stato del cluster.
-- Integrazione futura di security scans e quality gates.
-
-### Esempi di controlli operativi
-```bash
-python3 --version
-pip3 install -r requirements.txt
-python3 main.py
-```
+Lo script crea token limitati al solo bucket e scrive `influx-write.env` e `grafana-influxdb.env` senza stamparli; rifiuta overwrite e directory dentro il repository. Su Windows proteggere la directory con ACL dell'account. Integrare la riga `INFLUXDB_WRITE_TOKEN` nel file `nodered-auth.env`, insieme all'utente, hash bcrypt (`node-red admin hash-pw`) e chiave di cifratura casuale stabile. Conservare quest'ultima con i backup. Quindi:
 
 ```bash
-sudo systemctl status k3s --no-pager
-sudo k3s kubectl get nodes -o wide
-sudo k3s kubectl get pods -A
+kubectl -n ot-namespace create secret generic nodered-auth --from-env-file="$SECRET_DIR/nodered-auth.env"
+kubectl -n ot-namespace create secret generic grafana-influxdb --from-env-file="$SECRET_DIR/grafana-influxdb.env"
+python scripts/render_release.py "$RELEASE_SHA" --output rendered
+python scripts/preflight.py rendered
+kubectl apply --dry-run=server -f rendered
+kubectl apply -f rendered
+for app in influxdb nodered grafana ot-mqtt-consumer raspi-simulator ia-consumer; do
+  kubectl -n ot-namespace rollout status deployment/$app --timeout=300s
+done
 ```
 
-## 14. Preparazione per SIEM e monitoring
-Il progetto è pensato fin dall'inizio per facilitare una futura integrazione con strumenti di monitoring e SIEM. Questo non significa che il SIEM sia già attivo, ma che l'architettura sta già prendendo forma in modo compatibile con una successiva fase di raccolta, normalizzazione e correlazione degli eventi.
+Usare lo SHA completo di una release pubblicata con CI verde. Il renderer genera anche i tre ConfigMap Grafana e la checksum di provisioning; non modifica i sorgenti. Non applicare direttamente `k3s/`, che contiene tag `RELEASE_SHA`. I quattro tag di rilascio sono `<sha>`, `raspi-simulator-<sha>`, `ia-consumer-<sha>`, `nodered-<sha>`. Dopo rotazione dei Secret riavviare consapevolmente i pod interessati.
 
-### In che modo il progetto si prepara al SIEM
-- Presenza di un nodo master stabile con IP statico, utile come riferimento infrastrutturale.
-- Presenza di un cluster K3s su cui distribuire componenti di raccolta o telemetry agent.
-- Presenza di un flusso dati MQTT da un sensore simulato, utile per testare eventi applicativi o telemetria OT/IoT.
-- Presenza di cartelle e componenti repository che favoriscono automazione e standardizzazione.
-- Impostazione del laboratorio orientata a logging, monitoring e sicurezza, non solo a esecuzione applicativa.
+Accesso alle UI tramite port-forward su localhost; login con i rispettivi account:
 
-### Tipologie di dati potenzialmente utili per SIEM
-- Log di sistema del nodo Ubuntu Server.
-- Log del servizio `k3s`.
-- Eventi del cluster Kubernetes.
-- Log applicativi del simulatore Raspberry Pi.
-- Eventi di connessione e pubblicazione MQTT.
-- Futuri log di pipeline, deployment e security checks.
-
-### Comandi utili per preparazione e verifica
 ```bash
-sudo journalctl -u k3s -n 100 --no-pager
-sudo journalctl -xe --no-pager
-sudo k3s kubectl get events -A --sort-by=.metadata.creationTimestamp
-sudo k3s kubectl describe node $(hostname)
+kubectl -n ot-namespace port-forward service/grafana 3000:3000 --address=127.0.0.1
+kubectl -n ot-namespace port-forward service/nodered 1880:1880 --address=127.0.0.1
 ```
 
-### Monitoring e SIEM: stato attuale
-- **Monitoring dedicato**: planned.
-- **Collector / agent centralizzati**: planned.
-- **Integrazione SIEM completa**: planned.
-- **Correlazione eventi OT/IoT**: planned.
+Grafana: `http://127.0.0.1:3000/d/ot-security`. Le NetworkPolicy limitano InfluxDB a Node-RED/Grafana e le UI ai pod amministrativi etichettati; verificare enforcement K3s. Non pubblicare questi HTTP interni su internet. Per un accesso remoto diretto usare un reverse proxy TLS autenticato; il traffico interno HTTP assume una rete del cluster attendibile. Gli endpoint di amministrazione InfluxDB sono raggiunti dall'operatore tramite port-forward.
 
-## 15. Note di progetto / Design choices
-Alcune scelte architetturali emergono già con chiarezza:
+OpenPLC in `k3s/optional/` è fissato a digest e protetto da policy separata. La porta 8443 serve l'API dell'Editor v4, non una UI web; Modbus 502 richiede un programma/configurazione adeguati. Capability realtime e storage vanno collaudati a parte. Non viene avviato dal percorso core né collegato ad attuatori. Applicare entrambi i file opzionali solo quando viene introdotto quel collaudo.
 
-- **K3s invece di Kubernetes full-size**: scelta adatta a un laboratorio leggero, rapido da gestire e comunque realistico.
-- **IP statico sul master**: scelta fondamentale per stabilità operativa, troubleshooting e futura integrazione con servizi dipendenti dal control plane.
-- **Topologia 1 master + 1 worker**: equilibrio tra semplicità iniziale e separazione reale dei ruoli nel cluster.
-- **Raspberry Pi simulato**: permette di introdurre subito un flusso OT/IoT senza dipendere da hardware fisico.
-- **MQTT come bus di messaggistica**: scelta coerente con simulazioni sensor-based, telemetria e use case edge/lab.
-- **Repository già predisposto per script, Docker e CI/CD**: scelta utile per trasformare il laboratorio in piattaforma ripetibile e professionale.
+## Verifiche riproducibili
 
-## 16. Roadmap futura
-La roadmap del progetto, sulla base dello stato attuale, può essere delineata così:
+Python 3.11, Node.js 24, Docker Linux e OpenSSL per il test completo:
 
-- Consolidamento completo della documentazione del cluster.
-- Formalizzazione del worker node con dettagli tecnici aggiuntivi.
-- Versionamento più strutturato dei manifest K3s e delle automazioni.
-- Rafforzamento della pipeline CI/CD.
-- Introduzione di controlli di sicurezza automatizzati.
-- Aggiunta di componenti di monitoring.
-- Integrazione futura con SIEM.
-- Ampliamento della simulazione OT/IoT con ulteriori sensori o topic MQTT.
-- Eventuale espansione del cluster con nodi aggiuntivi.
-
-## 17. Troubleshooting essenziale
-Di seguito alcuni comandi utili per verifiche rapide dell'infrastruttura e del cluster.
-
-### Verifica IP e rete
 ```bash
-ip addr show ens33
-ip route
-networkctl status ens33
-ping -c 4 192.168.1.21
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+export PYTHONPATH="$PWD"
+bash scripts/run_tests.sh
+bash scripts/run_sast.sh
+npm ci --ignore-scripts --prefix platform/nodered
+npm test --prefix platform/nodered
+npm audit --omit=dev --audit-level=high --prefix platform/nodered
+bash scripts/validate_config.sh
+(cd IA-integration/ia-consumer && python train_model.py)
 ```
 
-### Verifica stato K3s
+Per provare l'intero stack senza il cluster, costruire le quattro immagini con lo stesso SHA e lanciare:
+
 ```bash
-sudo systemctl status k3s --no-pager
-sudo journalctl -u k3s -n 100 --no-pager
+export RELEASE_SHA="$(git rev-parse HEAD)"
+export IMAGE_NAME=ghcr.io/davidevaloroso-sys/ot-security
+docker build -t "$IMAGE_NAME:$RELEASE_SHA" .
+docker build -f IA-integration/raspi-simulator/Dockerfile -t "$IMAGE_NAME:raspi-simulator-$RELEASE_SHA" .
+docker build -f IA-integration/ia-consumer/Dockerfile -t "$IMAGE_NAME:ia-consumer-$RELEASE_SHA" .
+docker build -f platform/nodered/Dockerfile -t "$IMAGE_NAME:nodered-$RELEASE_SHA" .
+python scripts/integration_test.py "$RELEASE_SHA"
 ```
 
-### Verifica nodi del cluster
-```bash
-sudo k3s kubectl get nodes -o wide
-sudo k3s kubectl get pods -A
-sudo k3s kubectl get svc -A
-```
+Il test genera credenziali e certificati temporanei, usa porte casuali su localhost e una rete Docker dedicata. Prova MQTT TLS, inferenza, scrittura reale InfluxDB, token con permessi minimi, autenticazione Node-RED, datasource e ogni query della dashboard Grafana, poi arresto/ripristino del DB. Rimuove esclusivamente i propri container e volumi temporanei. Non usa il broker `192.168.1.12`. Richiede un Docker daemon funzionante; un test saltato non è un test superato.
 
-### Controllo base del cluster
-```bash
-sudo k3s kubectl cluster-info
-sudo k3s kubectl get events -A --sort-by=.metadata.creationTimestamp
-sudo k3s kubectl describe node $(hostname)
-```
+Lo smoke aggiuntivo `platform/nodered/test/runtime.cjs`, con `NODE_RED_RUNTIME` impostato al `red.js` installato, avvia Node-RED reale con broker e server HTTP di test. Non sostituisce il collaudo InfluxDB/Grafana.
 
-### Controllo networking di base
-```bash
-ss -tulpen
-sudo lsof -i -P -n
-ip neigh
-```
+## CI e qualità del modello
 
-### Kubeconfig per utente locale
-```bash
-mkdir -p ~/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-sudo chown "$USER":"$USER" ~/.kube/config
-export KUBECONFIG=~/.kube/config
-kubectl get nodes
-```
+Le PR e i push a main eseguono test, Bandit, validazione schema, training, quattro build e Trivy HIGH/CRITICAL; nessuna pubblicazione precede scansioni e integrazione. Solo main pubblica le immagini già provate. Actions e basi container sono fissate; Dependabot aggiorna Python, Docker, npm e Actions. La scansione può bloccare anche dipendenze upstream senza fix: non ignorare automaticamente gli avvisi.
 
-## 18. Conclusione
-Questo progetto rappresenta una piattaforma di laboratorio concreta, costruita per evolvere progressivamente da infrastruttura K3s minimale a ambiente più completo per DevSecOps, simulazione OT/IoT, automazione, monitoring e futura integrazione SIEM. Lo stato attuale mostra già elementi chiave di maturità tecnica: **cluster K3s con 1 master e 1 worker**, **master con IP statico 192.168.1.21/24 su ens33**, struttura repository orientata all'automazione e presenza di un **Raspberry Pi simulato** che genera valori random e li invia a un **broker MQTT**.
+Il job deploy mantiene i riferimenti WireGuard originali ma ha `if: false`: nessun push contatta la VM. Sarà abilitato insieme al proprietario dopo backup e collaudo, proteggendo l'environment `lab`.
 
-Il repository costituisce quindi una base credibile e professionale per sviluppare use case di cybersecurity applicata, orchestrazione container, raccolta eventi e sperimentazione security-oriented in un contesto di laboratorio reale.
+Il training valida dati/classi/unità, fa split stratificato 80/20 con seed 42 e registra hash, versioni, soglia runtime 0.70 e metriche. Il runtime rifiuta un artefatto alterato o incompatibile. `MIN_ANOMALY_RECALL` e `MIN_ANOMALY_PRECISION` sono gate opzionali espliciti; senza obiettivi concordati la release resta sperimentale. Risultati sul dataset incluso non dimostrano generalizzazione: servono dati indipendenti, verifica di drift e costi dei falsi allarmi prima di applicazioni reali. Caricare solo modelli joblib attendibili.
+
+## Collaudo sulla VM
+
+Verificare versione K3s/storage, permessi PVC, broker TLS/ACL, disponibilità immagini e Secret con preflight. Eseguire dry-run server, rollout, accesso UI, letture normali/anomale e riscontro timestamp in Grafana. Provare CA e password errate, topic negati, perdita broker/DB, recupero e riconsegna. Verificare backup/ripristino e enforcement delle NetworkPolicy. Solo queste prove sul server possono attestare l'operatività del laboratorio reale.
+
+Riferimenti: [Node-RED security](https://nodered.org/docs/user-guide/runtime/securing-node-red), [Grafana provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/), [InfluxDB scoped tokens](https://docs.influxdata.com/influxdb/v2/admin/tokens/create-token/), [InfluxDB upgrade](https://docs.influxdata.com/influxdb/v2/install/upgrade/v2-to-v2/), [OpenPLC Docker](https://github.com/Autonomy-Logic/openplc-runtime/blob/main/docs/DOCKER.md).

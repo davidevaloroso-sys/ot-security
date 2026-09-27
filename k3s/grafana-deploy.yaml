@@ -5,7 +5,7 @@ metadata:
   namespace: ot-namespace
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
@@ -26,37 +26,105 @@ spec:
         app: grafana
     spec:
       containers:
-        - name: grafana
-          image: grafana/grafana-oss:10.4.3
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: http
-              containerPort: 3000
-          env:
-            - name: GF_SECURITY_ADMIN_USER
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: GRAFANA_ADMIN_USER
-            - name: GF_SECURITY_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: GRAFANA_ADMIN_PASSWORD
-          volumeMounts:
-            - name: grafana-storage
-              mountPath: /var/lib/grafana
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-      volumes:
+      - name: grafana
+        image: grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: GRAFANA_ADMIN_USER
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: GRAFANA_ADMIN_PASSWORD
+        - name: INFLUXDB_ORG
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_ORG
+        - name: INFLUXDB_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_BUCKET
+        - name: INFLUXDB_READ_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: grafana-influxdb
+              key: INFLUXDB_READ_TOKEN
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: 'false'
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: 'false'
+        - name: GF_ANALYTICS_REPORTING_ENABLED
+          value: 'false'
+        - name: GF_ANALYTICS_CHECK_FOR_UPDATES
+          value: 'false'
+        - name: GF_SECURITY_COOKIE_SAMESITE
+          value: strict
+        volumeMounts:
         - name: grafana-storage
-          persistentVolumeClaim:
-            claimName: grafana-pvc
+          mountPath: /var/lib/grafana
+        - name: grafana-datasource
+          mountPath: /etc/grafana/provisioning/datasources
+          readOnly: true
+        - name: grafana-provider
+          mountPath: /etc/grafana/provisioning/dashboards
+          readOnly: true
+        - name: grafana-dashboard
+          mountPath: /etc/grafana/ot-dashboards
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        startupProbe:
+          httpGet: &id001
+            path: /api/health
+            port: 3000
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 472
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+      volumes:
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc
+      - name: grafana-datasource
+        configMap:
+          name: grafana-datasource
+      - name: grafana-provider
+        configMap:
+          name: grafana-provider
+      - name: grafana-dashboard
+        configMap:
+          name: grafana-dashboard
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 472
+        fsGroupChangePolicy: OnRootMismatch
+  strategy:
+    type: Recreate
 ---
 apiVersion: v1
 kind: Service
@@ -67,7 +135,7 @@ spec:
   selector:
     app: grafana
   ports:
-    - name: http
-      port: 3000
-      targetPort: 3000
+  - name: http
+    port: 3000
+    targetPort: 3000
   type: ClusterIP

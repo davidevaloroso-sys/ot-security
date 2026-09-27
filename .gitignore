@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.joblib
+training_metrics.json
+bandit-reports/
+.env*
+*.pem
+*.key
+secrets/
+rendered/
+node_modules/
+test-results/

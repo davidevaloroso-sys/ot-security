@@ -5,7 +5,7 @@ metadata:
   namespace: ot-namespace
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   resources:
     requests:
       storage: 5Gi
@@ -26,54 +26,89 @@ spec:
         app: influxdb
     spec:
       containers:
-        - name: influxdb
-          image: influxdb:2.7
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: http
-              containerPort: 8086
-          env:
-            - name: DOCKER_INFLUXDB_INIT_MODE
-              value: setup
-            - name: DOCKER_INFLUXDB_INIT_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: INFLUXDB_ADMIN_USER
-            - name: DOCKER_INFLUXDB_INIT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: INFLUXDB_ADMIN_PASSWORD
-            - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: INFLUXDB_ADMIN_TOKEN
-            - name: DOCKER_INFLUXDB_INIT_ORG
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: INFLUXDB_ORG
-            - name: DOCKER_INFLUXDB_INIT_BUCKET
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: INFLUXDB_BUCKET
-          volumeMounts:
-            - name: influxdb-storage
-              mountPath: /var/lib/influxdb2
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-      volumes:
+      - name: influxdb
+        image: influxdb:2.9.1@sha256:05d6fb735bc22449c401094d42846123a24e3325d3a6e092242a45bfd68fff21
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8086
+        env:
+        - name: DOCKER_INFLUXDB_INIT_MODE
+          value: setup
+        - name: DOCKER_INFLUXDB_INIT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_ADMIN_USER
+        - name: DOCKER_INFLUXDB_INIT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_ADMIN_PASSWORD
+        - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_ADMIN_TOKEN
+        - name: DOCKER_INFLUXDB_INIT_ORG
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_ORG
+        - name: DOCKER_INFLUXDB_INIT_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_BUCKET
+        volumeMounts:
         - name: influxdb-storage
-          persistentVolumeClaim:
-            claimName: influxdb-pvc
+          mountPath: /var/lib/influxdb2
+        - name: influxdb-config
+          mountPath: /etc/influxdb2
+        - name: tmp
+          mountPath: /tmp
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        startupProbe:
+          httpGet: &id001
+            path: /health
+            port: 8086
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 3
+      volumes:
+      - name: influxdb-config
+        persistentVolumeClaim:
+          claimName: influxdb-config-pvc
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
+      - name: influxdb-storage
+        persistentVolumeClaim:
+          claimName: influxdb-pvc
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+  strategy:
+    type: Recreate
 ---
 apiVersion: v1
 kind: Service
@@ -84,7 +119,18 @@ spec:
   selector:
     app: influxdb
   ports:
-    - name: http
-      port: 8086
-      targetPort: 8086
+  - name: http
+    port: 8086
+    targetPort: 8086
   type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: influxdb-config-pvc
+  namespace: ot-namespace
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi

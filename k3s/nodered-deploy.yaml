@@ -5,7 +5,7 @@ metadata:
   namespace: ot-namespace
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
@@ -26,54 +26,123 @@ spec:
         app: nodered
     spec:
       containers:
-        - name: nodered
-          image: nodered/node-red:3.1.9
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: http
-              containerPort: 1880
-          env:
-            - name: TZ
-              value: Europe/Rome
-            - name: OPENPLC_HOST
-              value: openplc
-            - name: OPENPLC_PORT
-              value: "502"
-            - name: MQTT_BROKER_HOST
-              value: "192.168.1.21"
-            - name: MQTT_BROKER_PORT
-              value: "1883"
-            - name: INFLUXDB_URL
-              value: http://influxdb:8086
-            - name: INFLUXDB_ORG
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: INFLUXDB_ORG
-            - name: INFLUXDB_BUCKET
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: INFLUXDB_BUCKET
-            - name: INFLUXDB_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: observability-secrets
-                  key: INFLUXDB_ADMIN_TOKEN
-          volumeMounts:
-            - name: nodered-storage
-              mountPath: /data
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-      volumes:
+      - name: nodered
+        image: ghcr.io/davidevaloroso-sys/ot-security:nodered-RELEASE_SHA
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 1880
+        env:
+        - name: TZ
+          value: Europe/Rome
+        - name: INFLUXDB_URL
+          value: http://influxdb:8086
+        - name: INFLUXDB_ORG
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_ORG
+        - name: INFLUXDB_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: observability-secrets
+              key: INFLUXDB_BUCKET
+        - name: INFLUXDB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: nodered-auth
+              key: INFLUXDB_WRITE_TOKEN
+        - name: NODE_RED_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: nodered-auth
+              key: NODE_RED_ADMIN_USER
+        - name: NODE_RED_ADMIN_PASSWORD_HASH
+          valueFrom:
+            secretKeyRef:
+              name: nodered-auth
+              key: NODE_RED_ADMIN_PASSWORD_HASH
+        - name: NODE_RED_CREDENTIAL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: nodered-auth
+              key: NODE_RED_CREDENTIAL_SECRET
+        - name: MQTT_BROKER
+          valueFrom:
+            configMapKeyRef:
+              name: mqtt-config
+              key: broker
+        - name: MQTT_PORT
+          value: '8883'
+        - name: MQTT_TLS
+          value: 'true'
+        - name: MQTT_CA_FILE
+          value: /etc/mqtt/ca.crt
+        - name: MQTT_CLIENT_ID
+          value: nodered-ingest-1
+        - name: MQTT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mqtt-nodered
+              key: username
+        - name: MQTT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mqtt-nodered
+              key: password
+        volumeMounts:
         - name: nodered-storage
-          persistentVolumeClaim:
-            claimName: nodered-pvc
+          mountPath: /data
+        - name: mqtt-ca
+          mountPath: /etc/mqtt
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        startupProbe:
+          tcpSocket:
+            port: 1880
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /ot-health
+            port: 1880
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+      volumes:
+      - name: nodered-storage
+        persistentVolumeClaim:
+          claimName: nodered-pvc
+      - name: mqtt-ca
+        configMap:
+          name: mqtt-ca
+      - name: tmp
+        emptyDir:
+          sizeLimit: 32Mi
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+  strategy:
+    type: Recreate
 ---
 apiVersion: v1
 kind: Service
@@ -84,7 +153,7 @@ spec:
   selector:
     app: nodered
   ports:
-    - name: http
-      port: 1880
-      targetPort: 1880
+  - name: http
+    port: 1880
+    targetPort: 1880
   type: ClusterIP

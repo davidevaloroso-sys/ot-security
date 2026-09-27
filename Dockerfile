@@ -1,16 +1,9 @@
-FROM python:3.11-slim
-
+FROM python:3.11-slim@sha256:e41613d42d4891e4930f79523f93f81bbc7632584ec65e36ab055f41a800b41e
 WORKDIR /app
-
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
-COPY . .
-
-# Non usare root in produzione seria, ma per iniziare:
-# RUN useradd -m appuser && chown -R appuser /app
-# USER appuser
-
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && useradd -u 10001 -m appuser
+COPY ot_common.py ./
+COPY main.py ./
+USER 10001
 CMD ["python", "main.py"]

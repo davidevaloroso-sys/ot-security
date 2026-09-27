@@ -1,19 +1,10 @@
-FROM python:3.11-slim
-
+FROM python:3.11-slim@sha256:e41613d42d4891e4930f79523f93f81bbc7632584ec65e36ab055f41a800b41e
 WORKDIR /app
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-RUN groupadd -g 10001 appgroup \
-    && useradd -u 10001 -g 10001 -m appuser
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY --chown=10001:10001 mqtt_anomaly_consumer.py .
-COPY --chown=10001:10001 model_random_forest.joblib .
-
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+COPY IA-integration/ia-consumer/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && useradd -u 10001 -m appuser
+COPY ot_common.py ./
+COPY IA-integration/ia-consumer/mqtt_anomaly_consumer.py ./
+COPY IA-integration/ia-consumer/model_random_forest.joblib IA-integration/ia-consumer/training_metrics.json ./
 USER 10001
-
 CMD ["python", "mqtt_anomaly_consumer.py"]

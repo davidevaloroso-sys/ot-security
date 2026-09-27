@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mqtt-config
+  namespace: ot-namespace
+data:
+  broker: "192.168.1.12"

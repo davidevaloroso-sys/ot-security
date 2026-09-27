@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: influxdb-ingress
+  namespace: ot-namespace
+spec:
+  podSelector:
+    matchLabels:
+      app: influxdb
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: nodered
+        - podSelector:
+            matchLabels:
+              app: grafana
+      ports:
+        - protocol: TCP
+          port: 8086
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana-ingress
+  namespace: ot-namespace
+spec:
+  podSelector:
+    matchLabels:
+      app: grafana
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              access-grafana: "true"
+      ports:
+        - protocol: TCP
+          port: 3000
