@@ -41,11 +41,15 @@ Topic: `lab/raspi1/temperature` (`C`), `lab/raspi1/humidity` (`%`), `lab/raspi1/
 
 Payload JSON UTF-8 fino a 16 KiB: `device` contiene 1–128 lettere ASCII, cifre o `_.:-`; `ts` è un intero Unix in secondi da 0 a 9223372036; `value` è finito; l'unità corrisponde al topic. `in_range` è booleano opzionale, `alert` stringa su una riga fino a 128 caratteri o null. IA e Node-RED scartano messaggi invalidi con un log senza payload. Non modificare topic di un solo componente: il contratto è condiviso con i flussi e il dashboard.
 
+L'IA normalizza i messaggi ai soli campi del contratto prima di calcolare `event_id` e costruire l'allarme. Le estensioni sconosciute sono ignorate: non possono causare errori di serializzazione o gonfiare l'uscita oltre il limite Node-RED. L'identificativo dipende dai campi normalizzati; messaggi che differiscono solo per estensioni hanno lo stesso ID. Il limite di `alert` conta punti di codice Unicode sia in Python sia in JavaScript.
+
 MQTT usa TLS verificato, minimo 1.2, QoS1 e sessioni persistenti. Ogni ruolo ha ClientId stabile distinto. I deployment `Recreate` evitano sovrapposizioni: non aumentare le repliche senza riprogettare sessioni e distribuzione del carico. Il broker deve mantenere la persistenza e code dimensionate per i guasti previsti.
 
 L'IA conferma l'ingresso dopo l'elaborazione e, per gli allarmi, dopo il PUBACK del broker. Node-RED conferma solo dopo HTTP 204 di InfluxDB. Durante un errore DB ritenta con backoff; una disconnessione annulla il tentativo della vecchia connessione, lasciando la riconsegna al broker. I messaggi malformati sono confermati e scartati per non bloccare la coda. QoS1 può duplicare consegne: InfluxDB usa measurement/tag/timestamp per riscrivere lo stesso punto. Due letture dello stesso sensore/tipo nello stesso secondo **si sovrascrivono**: il contratto attuale è per sensori a bassa frequenza. `event_id` resta un campo, non un tag ad alta cardinalità.
 
 Non c'è garanzia contro perdita del disco del broker o della persistenza MQTT. La readiness Node-RED richiede connessione, sottoscrizioni e almeno una scrittura riuscita; non è un controllo di freschezza continuo. La dashboard espone il timestamp per individuare una sorgente ferma. I client non hanno liveness dipendente dal broker, per evitare riavvii collettivi durante un guasto.
+
+Un singolo punto rifiutato definitivamente da InfluxDB con HTTP 413/422, o con HTTP 400 accompagnato dall'errore di parsing `invalid` / `unable to parse`, è confermato e scartato con log e incremento del contatore `rejected`, per non bloccare tutte le letture successive. Gli altri errori HTTP 400, di autenticazione/configurazione, rate limiting, rete e indisponibilità del DB mantengono il retry senza ACK: non vengono trattati come dati da scartare.
 
 ## Secret: riferimenti conservati e aggiunte approvate
 
@@ -156,6 +160,8 @@ python scripts/integration_test.py "$RELEASE_SHA"
 
 Il test genera credenziali e certificati temporanei, usa porte casuali su localhost e una rete Docker dedicata. Prova MQTT TLS, inferenza, scrittura reale InfluxDB, token con permessi minimi, autenticazione Node-RED, datasource e ogni query della dashboard Grafana, poi arresto/ripristino del DB. Rimuove esclusivamente i propri container e volumi temporanei. Non usa il broker `192.168.1.12`. Richiede un Docker daemon funzionante; un test saltato non è un test superato.
 
+Le verifiche di persistenza risolvono la porta pubblicata corrente di InfluxDB anche dopo un riavvio e controllano record CSV effettivi. Le pubblicazioni di test richiedono il PUBACK del broker; un timeout di pubblicazione viene riportato separatamente dal mancato salvataggio nel DB.
+
 Lo smoke aggiuntivo `platform/nodered/test/runtime.cjs`, con `NODE_RED_RUNTIME` impostato al `red.js` installato, avvia Node-RED reale con broker e server HTTP di test. Non sostituisce il collaudo InfluxDB/Grafana.
 
 ## CI e qualità del modello
@@ -164,7 +170,9 @@ Le PR e i push a main eseguono test, Bandit, validazione schema, training, quatt
 
 Il job deploy mantiene i riferimenti WireGuard originali ma ha `if: false`: nessun push contatta la VM. Sarà abilitato insieme al proprietario dopo backup e collaudo, proteggendo l'environment `lab`.
 
-Il training valida dati/classi/unità, fa split stratificato 80/20 con seed 42 e registra hash, versioni, soglia runtime 0.70 e metriche. Il runtime rifiuta un artefatto alterato o incompatibile. `MIN_ANOMALY_RECALL` e `MIN_ANOMALY_PRECISION` sono gate opzionali espliciti; senza obiettivi concordati la release resta sperimentale. Risultati sul dataset incluso non dimostrano generalizzazione: servono dati indipendenti, verifica di drift e costi dei falsi allarmi prima di applicazioni reali. Caricare solo modelli joblib attendibili.
+Il training valida dati/classi/unità, fa split stratificato 80/20 con seed 42 e registra hash, versioni, soglia runtime 0.70 e metriche. Il runtime rifiuta un artefatto alterato o incompatibile. I gate di regressione del laboratorio richiedono precisione e recall della classe anomala almeno 0.95 anche quando le variabili CI sono assenti o vuote. `MIN_ANOMALY_RECALL` e `MIN_ANOMALY_PRECISION` consentono override espliciti, registrati nelle metriche. Questi limiti verificano la regressione sul dataset incluso, non sono obiettivi di sicurezza industriale: la release resta sperimentale. Servono dati indipendenti, verifica di drift e costi dei falsi allarmi prima di applicazioni reali. Caricare solo modelli joblib attendibili.
+
+La proposta di hardening usa Python Alpine per audit/simulatore e InfluxDB 2.9.1 Alpine, mantenendo UID e versione applicativa. L'inferenza conserva la base precedente: scikit-learn 1.6.1 non fornisce wheel musllinux e richiede un percorso di build distinto prima di poter migrare. Le scansioni restano bloccanti, comprese le vulnerabilità nei binari Go upstream. Vedere `docs/REMEDIATION-STATUS.md` per prove effettuate e verifiche ancora necessarie.
 
 ## Collaudo sulla VM
 

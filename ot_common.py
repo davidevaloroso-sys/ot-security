@@ -29,6 +29,13 @@ class PayloadError(ValueError):
     pass
 
 
+def normalize_payload(payload, measure_type):
+    """Keep only validated contract fields, never arbitrary producer extensions."""
+    validate_payload(payload, measure_type)
+    return {key: payload[key] for key in
+            ("device", "ts", "value", "unit", "in_range", "alert") if key in payload}
+
+
 def validate_payload(payload, measure_type):
     if not isinstance(payload, dict):
         raise PayloadError("payload must be an object")

@@ -4,6 +4,8 @@ Uses generated test credentials and isolated containers; never contacts the lab.
 """
 import argparse
 import base64
+import csv
+import io
 import json
 import os
 from pathlib import Path
@@ -96,6 +98,29 @@ def platform_image(name):
     return next(d for d in documents if d['kind'] == 'Deployment')['spec']['template']['spec']['containers'][0]['image']
 
 
+def reading_persisted(stack, token, query, device):
+    # Resolve on each query: Docker can reallocate ephemeral ports on restart.
+    url = 'http://' + stack.endpoint('influxdb', 8086) + '/api/v2/query?org=lab'
+    status, body = request(url, token, {'query': query})
+    if status == 429 or status >= 500:
+        return False
+    if status != 200:
+        raise RuntimeError(f'InfluxDB verification query failed (HTTP {status})')
+    # Parse actual records, rather than matching device names inside error text.
+    lines = [line for line in body.decode('utf-8').splitlines()
+             if line and not line.startswith('#')]
+    return any(row.get('device') == device for row in csv.DictReader(io.StringIO('\n'.join(lines))))
+
+
+def publish_checked(client, topic, payload):
+    info = client.publish(topic, json.dumps(payload), qos=1)
+    if info.rc != mqtt.MQTT_ERR_SUCCESS:
+        raise RuntimeError('Test reading was not queued for MQTT publication')
+    info.wait_for_publish(timeout=10)
+    if not info.is_published():
+        raise TimeoutError('Broker did not acknowledge the test reading')
+
+
 def run(revision):
     image = 'ghcr.io/davidevaloroso-sys/ot-security:'
     with tempfile.TemporaryDirectory(prefix='ot-stack-') as temporary:
@@ -146,12 +171,12 @@ def run(revision):
             timestamp=int(time.time())
             for topic,value,unit in [('temperature',25,'C'),('humidity',55,'%'),('temperature',150,'C')]:
                 payload={'device':'integration','value':value,'unit':unit,'ts':timestamp}
-                publisher.publish('lab/raspi1/'+topic,json.dumps(payload),qos=1).wait_for_publish(timeout=10)
+                publish_checked(publisher,'lab/raspi1/'+topic,payload)
                 timestamp+=1
             until(lambda: request(node_url+'/ot-health')[0]==200,'Node-RED persisted telemetry')
             query='from(bucket:"ot") |> range(start:-1h, stop:1h) |> filter(fn:(r)=>r._measurement=="ot_anomaly")'
             query_url=influx+'/api/v2/query?org=lab'
-            until(lambda: b'integration' in request(query_url,tokens['grafana'],{'query':query})[1],'Inference alert persisted in InfluxDB')
+            until(lambda: reading_persisted(stack,tokens['grafana'],query,'integration'),'Inference alert persisted in InfluxDB')
             denied_status,denied_body=request(query_url,tokens['nodered'],{'query':query})
             # InfluxDB deliberately hides buckets from tokens without read permission.
             hidden_bucket=(denied_status==404 and b'bucket' in denied_body.lower()
@@ -182,12 +207,17 @@ def run(revision):
                 assert response['results']['A'].get('frames'),f'Grafana panel returned no frames: {panel["title"]}'
             # Recover after a real database outage; broker retains unacknowledged QoS1 input.
             command('docker','stop',stack.prefix+'-influxdb')
-            publisher.publish('lab/raspi1/temperature',json.dumps({'device':'recovery','value':26,'unit':'C','ts':int(time.time())}),qos=1).wait_for_publish(timeout=10)
+            publish_checked(publisher,'lab/raspi1/temperature',{'device':'recovery','value':26,'unit':'C','ts':int(time.time())})
             until(lambda: request(node_url+'/ot-health')[0]==503,'Readiness during database outage',30)
             command('docker','start',stack.prefix+'-influxdb')
+            # Docker may allocate a different ephemeral host port on restart.
+            # Node-RED uses the stable internal address, but the host query must
+            # resolve the current published port before checking persistence.
+            influx='http://'+stack.endpoint('influxdb',8086)
+            until(lambda: request(influx+'/health')[0]==200,'Restarted InfluxDB endpoint')
             until(lambda: request(node_url+'/ot-health')[0]==200,'Database recovery')
             recovery='from(bucket:"ot") |> range(start:-1h) |> filter(fn:(r)=>r.device=="recovery")'
-            until(lambda: b'recovery' in request(query_url,tokens['grafana'],{'query':recovery})[1],'Recovery reading persisted')
+            until(lambda: reading_persisted(stack,tokens['grafana'],recovery,'recovery'),'Recovery reading persisted')
             print('PASS: TLS MQTT → Python inference + Node-RED → InfluxDB → all Grafana panels; token isolation, login and outage recovery')
         finally:
             if publisher:

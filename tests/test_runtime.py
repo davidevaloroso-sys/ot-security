@@ -160,6 +160,19 @@ def test_quality_gate_is_enforced(training,monkeypatch):
     assert metrics['quality_status']=='failed'
 
 
+@pytest.mark.parametrize('configured', [None, ''])
+def test_quality_gate_cannot_be_silently_disabled(training, monkeypatch, configured):
+    for name in ('MIN_ANOMALY_RECALL', 'MIN_ANOMALY_PRECISION'):
+        if configured is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, configured)
+    metrics = {'runtime': training.runtime_metrics([0, 1], [0.1, 0.6], 0.7)}
+    assert not training.check_quality(metrics)
+    assert metrics['quality_gates'] == {'recall': 0.95, 'precision': 0.95}
+    assert metrics['quality_status'] == 'failed'
+
+
 def test_real_pipeline_roundtrip(training,ia,payload,tmp_path):
     import joblib
     data=training.validate_dataset(dataset())
@@ -218,3 +231,39 @@ def test_normal_reading_acknowledged_without_alarm(ia,payload):
     client=Mock();client.ack.return_value=0
     ia.Processor(client).process(message(ia,payload))
     client.publish.assert_not_called();client.ack.assert_called_once_with(3,1)
+
+
+def test_untrusted_extensions_cannot_crash_inference(ia, payload):
+    ia.model = SimpleNamespace(classes_=[0, 1], predict_proba=lambda _: [[0.9, 0.1]])
+    expected = ia.evaluate_payload(payload, ia.MQTT_TOPIC_TEMP)
+    # JSON's exponent syntax can overflow to infinity without parse_constant.
+    extended = json.loads(json.dumps(payload)[:-1] + ', "extra": 1e400}')
+    client = Mock(); client.ack.return_value = 0
+    processor = ia.Processor(client)
+    msg = message(ia, payload)
+    msg.payload = (json.dumps(payload)[:-1] + ', "extra": 1e400}').encode()
+    processor.process(msg)
+    client.ack.assert_called_once_with(3, 1)
+    assert ia.evaluate_payload(extended, ia.MQTT_TOPIC_TEMP) == expected
+
+
+def test_alarm_from_large_input_fits_downstream_contract(ia, payload):
+    ia.model = SimpleNamespace(classes_=[0, 1], predict_proba=lambda _: [[0.1, 0.9]])
+    payload['extra'] = 'x' * 16150
+    msg = message(ia, payload)
+    assert len(msg.payload) <= 16384
+    client = Mock(); client.ack.return_value = 0
+    client.publish.return_value = Mock(rc=0)
+    client.publish.return_value.is_published.return_value = True
+    ia.Processor(client).process(msg)
+    alarm = client.publish.call_args.args[1]
+    assert len(alarm.encode('utf-8')) <= 16384
+    assert 'extra' not in json.loads(alarm)
+    client.ack.assert_called_once_with(3, 1)
+
+
+def test_largest_contract_fields_produce_bounded_alarm(ia, payload):
+    ia.model = SimpleNamespace(classes_=[0, 1], predict_proba=lambda _: [[0.1, 0.9]])
+    payload.update(device='a' * 128, alert='\U0001f525' * 128, in_range=False)
+    result = ia.evaluate_payload(payload, ia.MQTT_TOPIC_TEMP)
+    assert len(json.dumps(result, allow_nan=False).encode('utf-8')) < 2048

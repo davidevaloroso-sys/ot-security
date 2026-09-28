@@ -12,7 +12,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import paho.mqtt.client as mqtt
-from ot_common import SubscriptionHealth, build_mqtt_client, marker, threshold, validate_payload, PayloadError
+from ot_common import SubscriptionHealth, build_mqtt_client, marker, threshold, validate_payload, normalize_payload, PayloadError
 
 MODEL_PATH = Path(os.getenv("MODEL_PATH", "model_random_forest.joblib"))
 MQTT_TOPIC_TEMP = os.getenv("MQTT_TOPIC_TEMP", "lab/raspi1/temperature")
@@ -53,6 +53,7 @@ def build_features(payload, measure_type):
 
 def evaluate_payload(payload, topic):
     measure_type = {MQTT_TOPIC_TEMP: "temp", MQTT_TOPIC_HUM: "hum"}.get(topic)
+    payload = normalize_payload(payload, measure_type)
     features = build_features(payload, measure_type)
     index = anomaly_index(model)
     probabilities = np.asarray(model.predict_proba(features)[0])

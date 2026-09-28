@@ -19,6 +19,8 @@ from ot_common import threshold
 DATASET_PATH = Path("dataset_sensori.xlsx")
 MODEL_PATH = Path("model_random_forest.joblib")
 METRICS_PATH = Path("training_metrics.json")
+# Regression floors for the included laboratory dataset, not industrial safety targets.
+LABORATORY_QUALITY_GATES = {"recall": 0.95, "precision": 0.95}
 
 
 def validate_dataset(df):
@@ -64,8 +66,7 @@ def runtime_metrics(y, scores, cutoff):
 
 
 def check_quality(metrics):
-    # No fabricated acceptance target: configured gates are explicit and recorded.
-    gates = {}
+    gates = dict(LABORATORY_QUALITY_GATES)
     for metric, variable in (("recall", "MIN_ANOMALY_RECALL"), ("precision", "MIN_ANOMALY_PRECISION")):
         value = os.getenv(variable)
         if value is not None and value != "":
@@ -74,7 +75,8 @@ def check_quality(metrics):
                 raise ValueError(f"Invalid {variable}")
             gates[metric] = limit
     metrics["quality_gates"] = gates
-    metrics["quality_status"] = "passed" if gates else "not_configured"
+    metrics["quality_scope"] = "laboratory regression; independent field validation required"
+    metrics["quality_status"] = "passed"
     for metric, limit in gates.items():
         if metrics["runtime"]["classification_report"]["1"][metric] < limit:
             metrics["quality_status"] = "failed"

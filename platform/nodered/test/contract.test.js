@@ -19,3 +19,13 @@ test("anomaly event ID is a field, not an unbounded tag", () => {
     assert.match(line, /^ot_anomaly,device=raspi1,kind=temperature,unit=C /);
     assert.match(line, /score=0.9,model_alert=true,event_id="a{64}"/);
 });
+
+test("alert length agrees with Python's Unicode code point limit", () => {
+    assert.doesNotThrow(() => reading(TEMPERATURE, encode({...sample, alert: '🔥'.repeat(128)})));
+    assert.throws(() => reading(TEMPERATURE, encode({...sample, alert: '🔥'.repeat(129)})));
+});
+
+test("unused extensions do not affect the persisted reading", () => {
+    assert.equal(reading(TEMPERATURE, encode({...sample, extension: 'x'.repeat(16000)})).line,
+        reading(TEMPERATURE, encode(sample)).line);
+});

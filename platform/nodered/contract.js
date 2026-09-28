@@ -22,7 +22,7 @@ function reading(topic, bytes) {
     const kind = source === TEMPERATURE ? "temperature" : source === HUMIDITY ? "humidity" : null;
     if (!kind || data.unit !== (kind === "temperature" ? "C" : "%")) throw new Error("Topic/unit mismatch");
     if (data.in_range !== undefined && typeof data.in_range !== "boolean") throw new Error("Invalid in_range");
-    if (data.alert != null && (typeof data.alert !== "string" || /[\r\n]/.test(data.alert) || data.alert.length > 128)) throw new Error("Invalid alert");
+    if (data.alert != null && (typeof data.alert !== "string" || /[\r\n]/.test(data.alert) || [...data.alert].length > 128)) throw new Error("Invalid alert");
     let fields = `value=${data.value}`;
     if (topic === ANOMALY) {
         if (data.model_alert !== true || !Number.isFinite(data.model_anomaly_score) || data.model_anomaly_score < 0 || data.model_anomaly_score > 1 || !/^[a-f0-9]{64}$/.test(data.event_id)) throw new Error("Invalid anomaly");

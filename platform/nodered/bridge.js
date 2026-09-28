@@ -41,8 +41,17 @@ class Bridge {
             body: line, redirect: "error",
             signal: AbortSignal.any([signal, this.abort.signal, AbortSignal.timeout(5000)])
         });
-        await response.arrayBuffer();
-        if (response.status !== 204) throw new Error(`InfluxDB write HTTP ${response.status}`);
+        const body = await response.text();
+        if (response.status !== 204) {
+            const error = new Error(`InfluxDB write HTTP ${response.status}`);
+            error.status = response.status;
+            let detail;
+            try { detail = JSON.parse(body); } catch (_) { /* No response body is logged. */ }
+            error.permanentPoint = response.status === 413 || response.status === 422 ||
+                (response.status === 400 && detail?.code === 'invalid' &&
+                 typeof detail.message === 'string' && /^unable to parse(?: |:)/i.test(detail.message));
+            throw error;
+        }
     }
     async process(packet, signal = this.abort.signal) {
         let record;
@@ -56,7 +65,14 @@ class Bridge {
                 this.state.written++;
                 this.notify({payload: {device: record.device, kind: record.kind, measurement: record.measurement, persisted: true}});
                 return;
-            } catch (_) {
+            } catch (error) {
+                // Each request contains one point. Retrying a permanently
+                // rejected point would block every following MQTT delivery.
+                if (error.permanentPoint) {
+                    this.state.rejected++;
+                    this.report(`Telemetry rejected by InfluxDB (HTTP ${error.status}); discarded`);
+                    return;
+                }
                 this.state.database = false;
                 if (signal.aborted || this.abort.signal.aborted) throw new Error("Ingestion connection closed");
                 this.state.retries++;

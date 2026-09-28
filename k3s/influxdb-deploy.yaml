@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
       - name: influxdb
-        image: influxdb:2.9.1@sha256:05d6fb735bc22449c401094d42846123a24e3325d3a6e092242a45bfd68fff21
+        image: influxdb:2.9.1-alpine@sha256:38e81dd3af50d085704d970815210dae3d094c5a8a70d7a8f336716889022ea2
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

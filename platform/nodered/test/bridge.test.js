@@ -52,6 +52,57 @@ test("TLS checks cannot be disabled accidentally", () => {
     assert.equal(config.options.protocol,"mqtts"); assert.equal(config.options.rejectUnauthorized,true); assert.equal(config.options.clean,false);
     assert.throws(() => configuration({...env,MQTT_TLS:"false"}));
 });
+
+for (const status of [400, 413, 422]) {
+    test(`permanent HTTP ${status} rejects one point and permits the next reading`, async () => {
+        const reports = [];
+        const bridge = new Bridge({}, () => {}, message => reports.push(message));
+        let writes = 0;
+        bridge.write = async () => {
+            if (++writes === 1) throw Object.assign(new Error('invalid point'), {status, permanentPoint: true});
+        };
+        const packet = {topic: TEMPERATURE, payload: Buffer.from(JSON.stringify({device: 'raspi1', value: 25, unit: 'C', ts: 1760000000}))};
+        await bridge.process(packet);
+        await bridge.process(packet);
+        assert.equal(writes, 2);
+        assert.equal(bridge.state.rejected, 1);
+        assert.equal(bridge.state.written, 1);
+        assert.equal(bridge.state.retries, 0);
+        assert.match(reports[0], /discarded/);
+        await bridge.close();
+    });
+}
+
+for (const status of [400, 401, 403, 404, 429, 500, 503]) {
+    test(`HTTP ${status} preserves the pending reading until recovery`, async () => {
+        const bridge = new Bridge({});
+        let writes = 0;
+        bridge.write = async () => {
+            if (++writes === 1) throw Object.assign(new Error('temporarily unavailable'), {status});
+        };
+        await bridge.process({topic: TEMPERATURE, payload: Buffer.from(JSON.stringify({device: 'raspi1', value: 25, unit: 'C', ts: 1760000000}))});
+        assert.equal(writes, 2);
+        assert.equal(bridge.state.rejected, 0);
+        assert.equal(bridge.state.written, 1);
+        await bridge.close();
+    });
+}
+
+test('HTTP errors distinguish invalid points from broken configuration', async t => {
+    let status = 400, body = {code: 'invalid', message: 'organization must be specified'};
+    const server = http.createServer((req, res) => {
+        req.resume(); req.on('end', () => res.writeHead(status).end(JSON.stringify(body)));
+    });
+    server.listen(0, '127.0.0.1'); await once(server, 'listening');
+    const bridge = new Bridge({endpoint: `http://127.0.0.1:${server.address().port}`, token: 'test-only'});
+    t.after(async () => { await bridge.close(); server.close(); });
+    await assert.rejects(bridge.write('point value=1'), error => error.status === 400 && !error.permanentPoint);
+    body = {code: 'invalid', message: 'unable to parse point: invalid field'};
+    await assert.rejects(bridge.write('point value=1'), error => error.status === 400 && error.permanentPoint);
+    for (status of [413, 422]) {
+        await assert.rejects(bridge.write('point value=1'), error => error.permanentPoint);
+    }
+});
 test("disconnect cancels the old database retry without acknowledging input", async () => {
     const bridge = new Bridge({});
     let attempts = 0;
