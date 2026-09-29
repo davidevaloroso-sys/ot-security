@@ -29,6 +29,9 @@ def test_ci_pr_has_no_write_permissions_and_scan_precedes_publish():
     assert deploy['if']=="github.event_name == 'push' && github.ref == 'refs/heads/main'"
     assert deploy['environment']=='lab'
     assert deploy['concurrency']=={'group':'ot-lab-deployment','cancel-in-progress':False}
+    configure=next(step for step in deploy['steps'] if step.get('name')=='Configure VPN and kubeconfig')
+    assert '192.168.1.12 k3s--lab.cloud-ip.cc' in configure['run']
+    assert 'AllowedIPs = 192.168.1.12/32' in configure['run']
     assert "github.event_name == 'push'" in workflow['jobs']['publish']['if']
     assert 'permissions' not in workflow['jobs']['build']
     for job in workflow['jobs'].values():
