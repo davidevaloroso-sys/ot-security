@@ -1,10 +1,10 @@
 # Attività che richiedono il laboratorio acceso
 
-API K3s e broker MQTT sulla VM: **192.168.1.21**; API esposta al job come **k3s--lab.cloud-ip.cc**. Il proprietario ha autorizzato deploy e uso dei Secret GitHub. Il job è abilitato sui push a main dopo tutti i gate; questa checklist non attesta prove già eseguite. Consultare `REMEDIATION-STATUS.md` per gli esiti effettivi.
+API K3s e broker MQTT sulla VM: **192.168.1.21**. Il runner apre WireGuard tramite **k3s--lab.cloud-ip.cc:51820/UDP** e interroga **https://192.168.1.21:6443** nel tunnel. Il proprietario ha autorizzato deploy e uso dei Secret GitHub. Il job è abilitato sui push a main dopo tutti i gate; questa checklist non attesta prove già eseguite. Consultare `REMEDIATION-STATUS.md` per gli esiti effettivi.
 
 | Passo | Cosa verificare sul server | Esito atteso |
 |---|---|---|
-| Accesso | VPN, kubeconfig/CA per `k3s--lab.cloud-ip.cc` e route privata verso `192.168.1.21` | `python scripts/preflight.py --cluster-only` passa; API risponde senza opzioni insecure |
+| Accesso | DDNS pubblico WireGuard, route VPN a `.21`, kubeconfig/CA e IP SAN `192.168.1.21` | `python scripts/preflight.py --cluster-only` valida la configurazione; `kubectl --request-timeout=30s get --raw=/version` verifica rete, TLS e risposta API |
 | Inventario | Versione K3s, architettura dei nodi, capacità RAM/CPU, storage class, PVC e installazioni precedenti | Nodi Ready; immagini compatibili con l'architettura; spazio sufficiente |
 | Backup | Esportazione dei dati InfluxDB, dati Grafana/Node-RED, configurazione broker e conservazione sicura dei Secret | Copie esterne alla VM con una prova di ripristino; nessuna sovrascrittura dei PVC originali |
 | Migrazione | Compatibilità dei dati esistenti con InfluxDB 2.9.1, Grafana 13.2.2 e Node-RED 5.0.7 | Migrazione su copia verificata prima del rollout; permessi UID/GID corretti |
@@ -18,7 +18,7 @@ API K3s e broker MQTT sulla VM: **192.168.1.21**; API esposta al job come **k3s-
 | Isolamento | Enforcement delle NetworkPolicy da pod consentiti e non consentiti | InfluxDB raggiungibile solo dai ruoli previsti; UI non pubbliche |
 | Guasti | Arresto controllato del broker e del DB, riconnessione, riconsegna QoS1 | Readiness degrada; al ripristino riprende la persistenza; niente conferme premature |
 | Durabilità | Riavvio di pod/nodo e ripristino da backup | Dati e configurazioni conservati; ClientId senza sovrapposizioni |
-| CD | Protezioni environment `lab`, Secret WireGuard originali, verifica SHA prima di apply | Il deploy usa la release verificata e raggiunge esclusivamente il laboratorio autorizzato |
+| CD | Environment `lab`, chiavi WireGuard originali, endpoint DDNS dal workflow, copia kubeconfig normalizzata e verifica SHA prima di apply | Il deploy usa la release verificata e raggiunge esclusivamente il laboratorio autorizzato |
 
 ## Ordine operativo
 

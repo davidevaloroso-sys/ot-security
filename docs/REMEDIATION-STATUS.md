@@ -2,11 +2,15 @@
 
 ## Stato della release
 
-Il proprietario ha autorizzato correzioni, push diretto a `main`, test e deploy K3s; ha confermato l'uso dei Secret GitHub WireGuard/Kubeconfig già configurati. Docker Desktop Linux è ora disponibile. Il PC non ha un contesto Kubernetes locale: il job GitHub nell'environment `lab` raggiunge la VM `192.168.1.21` tramite `k3s--lab.cloud-ip.cc`; la stessa VM ospita anche il broker MQTT.
+Il proprietario ha autorizzato correzioni, push diretto a `main`, test e deploy K3s; ha confermato l'uso dei Secret GitHub WireGuard/Kubeconfig già configurati. Docker Desktop Linux è ora disponibile. Il PC non ha un contesto Kubernetes locale: il job GitHub nell'environment `lab` apre WireGuard tramite `k3s--lab.cloud-ip.cc:51820` e raggiunge l'API privata `192.168.1.21:6443`; la stessa VM ospita anche il broker MQTT.
 
-La candidata locale ha completato i controlli riportati sotto. CI remota, pubblicazione e deploy di queste modifiche devono ancora essere verificati. Nessun risultato locale viene presentato come rollout sul laboratorio.
+Il [run remoto 36624149826](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36624149826), sul commit `9435bf8`, ha superato test/training, sei build, scansioni, integrazione e publish. Il deploy si è fermato prima dell'apply con `x509: certificate is valid for ..., not k3s--lab.cloud-ip.cc`. Il proprietario ha chiarito che il DDNS serve solo alla VPN. La nuova configurazione elimina il nome DNS dall'API e mantiene la verifica TLS sull'IP privato; il nuovo rollout non è ancora confermato. Dettagli in [K3S-TLS.md](K3S-TLS.md).
+
+La correzione usa l'endpoint pubblico esplicito nel workflow e non legge più il vecchio Secret `WG_ENDPOINT`. Conserva le chiavi WireGuard e il Secret `K3S_KUBECONFIG`: solo la copia del runner viene adattata al server privato, mantenendo CA/credenziali, togliendo l'override TLS DNS e rifiutando proxy o verifica TLS disabilitata. Nessuna modifica a `/etc/hosts`, alla CA o ai certificati della VM. Il preflight distingue ora la validazione della configurazione dalla successiva connessione reale. I test coprono endpoint errati, verifica TLS, proxy, selezione del contesto, conservazione credenziali e assenza di contenuti segreti negli errori.
 
 Il run remoto [36615805957](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36615805957) sul commit `2189c19` ha superato test/training, sei build, scansioni, integrazione e pubblicazione delle immagini. Il job `deploy_k3s` ha validato il nome DDNS nel kubeconfig e la VPN, ma `kubectl get --raw=/version` è terminato dopo 30 secondi con `Client.Timeout exceeded while awaiting headers`, prima di qualsiasi dry-run o apply. Le verifiche sulla VM hanno poi mostrato K3s in ascolto su `*:6443` sull'host `192.168.1.21`, mentre il runner stava instradando l'API verso l'indirizzo errato `192.168.1.12`. Il commit locale successivo corregge `AllowedIPs` e la mappatura temporanea del DDNS verso `192.168.1.21`; anche il broker MQTT usa `.21`.
+
+Verifica locale della correzione DDNS/API: 110 test Python superati, Bandit senza risultati Medium/High, actionlint e preflight offline superati, kubeconform con 25 risorse valide e zero errori. La verifica Linux è stata eseguita in un container temporaneo con checkout in sola lettura; il primo tentativo richiedeva coreutils al posto dello sha256sum BusyBox, il secondo è terminato con successo. Questi controlli non attestano ancora un deploy sul cluster.
 
 ## Cronologia e correzioni
 
@@ -25,7 +29,7 @@ Il run remoto [36615805957](https://github.com/davidevaloroso-sys/ot-security/ac
 
 | Verifica | Esito |
 |---|---|
-| Pytest, ambiente Python 3.12.14 | 97 test passati |
+| Pytest, ambiente Python 3.12.14 | 110 test passati dopo la separazione DDNS/VPN e API privata |
 | Cinque build Docker Linux | Passate; Python runtime 3.11.16 |
 | Caricamento modello IA, UID 10001, filesystem read-only, rete assente | Passato |
 | Portabilità modello su 10.000 righe | Differenza massima probabilità 0.0, classi identiche a soglia 0.70 |

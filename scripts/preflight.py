@@ -3,10 +3,9 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
-from urllib.parse import urlsplit
 import yaml
 
-K3S_API_HOST = 'k3s--lab.cloud-ip.cc'
+K3S_API_SERVER = 'https://192.168.1.21:6443'
 
 
 def inspect(directory):
@@ -46,12 +45,41 @@ def kubectl_json(*args):
     return json.loads(result.stdout)
 
 
+def validate_cluster(cluster):
+    if (cluster.get('server') != K3S_API_SERVER
+            or cluster.get('insecure-skip-tls-verify')
+            or cluster.get('tls-server-name') not in (None, '', '192.168.1.21')
+            or cluster.get('proxy-url')):
+        raise ValueError(f'Expected verified K3s API at {K3S_API_SERVER} without proxy or DNS TLS override')
+
+
+def prepare_kubeconfig(path):
+    """Normalize only the runner's private kubeconfig copy; never print credentials."""
+    try:
+        config = yaml.safe_load(path.read_text(encoding='utf-8'))
+        contexts = [item['context'] for item in config['contexts']
+                    if item['name'] == config['current-context']]
+        if len(contexts) != 1:
+            raise ValueError('Ambiguous active context')
+        clusters = [item['cluster'] for item in config['clusters']
+                    if item['name'] == contexts[0]['cluster']]
+        if len(clusters) != 1 or not isinstance(clusters[0], dict):
+            raise ValueError('Ambiguous active cluster')
+    except (OSError, yaml.YAMLError, KeyError, TypeError, ValueError):
+        raise ValueError('Invalid kubeconfig context/cluster; contents withheld') from None
+    cluster = clusters[0]
+    if cluster.get('insecure-skip-tls-verify') or cluster.get('proxy-url'):
+        raise ValueError('Kubeconfig must enable TLS verification and connect without a proxy')
+    cluster['server'] = K3S_API_SERVER
+    cluster.pop('tls-server-name', None)
+    validate_cluster(cluster)
+    path.chmod(0o600)
+    path.write_text(yaml.safe_dump(config, sort_keys=False), encoding='utf-8')
+
+
 def check_cluster():
     config = kubectl_json('config', 'view', '--minify')
-    cluster = config['clusters'][0]['cluster']
-    endpoint = urlsplit(cluster['server'])
-    if endpoint.scheme != 'https' or endpoint.hostname != K3S_API_HOST or cluster.get('insecure-skip-tls-verify'):
-        raise ValueError(f'Expected verified K3s API on {K3S_API_HOST}')
+    validate_cluster(config['clusters'][0]['cluster'])
 
 
 def check_nodes():
@@ -74,11 +102,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path, nargs='?')
     parser.add_argument('--offline', action='store_true')
-    parser.add_argument('--cluster-only', action='store_true')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--cluster-only', action='store_true')
+    mode.add_argument('--prepare-kubeconfig', type=Path)
     args = parser.parse_args()
+    if args.prepare_kubeconfig:
+        prepare_kubeconfig(args.prepare_kubeconfig)
+        print('Runner kubeconfig prepared for the private K3s API; TLS verification enabled')
+        return
     if args.cluster_only:
         check_cluster()
-        print('Cluster endpoint validated')
+        print('Kubeconfig endpoint validated (network and TLS handshake not yet checked)')
         return
     if args.directory is None:
         parser.error('Rendered directory required')

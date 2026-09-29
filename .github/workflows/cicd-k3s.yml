@@ -233,7 +233,8 @@ jobs:
         env:
           WG_PRIVATE: ${{ secrets.WG_CLIENT_PRIVATE_KEY }}
           WG_PUBLIC: ${{ secrets.WG_SERVER_PUBLIC_KEY }}
-          WG_ENDPOINT: ${{ secrets.WG_ENDPOINT }}
+          # Public DDNS is used only to establish the WireGuard tunnel.
+          WG_ENDPOINT: k3s--lab.cloud-ip.cc:51820
           KUBE_CONFIG: ${{ secrets.K3S_KUBECONFIG }}
         run: |
           for required in WG_PRIVATE WG_PUBLIC WG_ENDPOINT KUBE_CONFIG; do
@@ -247,13 +248,9 @@ jobs:
           umask 077
           printf '[Interface]\nAddress = 10.6.0.2/32\nPrivateKey = %s\n\n[Peer]\nPublicKey = %s\nEndpoint = %s\nAllowedIPs = 192.168.1.21/32,10.42.0.0/16,10.43.0.0/16\nPersistentKeepalive = 25\n' "$WG_PRIVATE" "$WG_PUBLIC" "$WG_ENDPOINT" > "$RUNNER_TEMP/wg0.conf"
           printf '%s\n' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+          python scripts/preflight.py --prepare-kubeconfig "$RUNNER_TEMP/kubeconfig"
           sudo wg-quick up "$RUNNER_TEMP/wg0.conf"
-          # Keep the certificate/kubeconfig hostname while forcing the API traffic
-          # through the private address covered by the WireGuard route. Public DDNS
-          # resolution would otherwise bypass the tunnel on the GitHub runner.
-          sudo sed -i '/[[:space:]]k3s--lab\.cloud-ip\.cc$/d' /etc/hosts
-          printf '192.168.1.21 k3s--lab.cloud-ip.cc\n' | sudo tee -a /etc/hosts >/dev/null
-          getent hosts k3s--lab.cloud-ip.cc
+          # API traffic uses the private IP; leave public DNS resolution intact.
           ip route get 192.168.1.21
           echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
       - name: Validate API and deploy versioned workloads
@@ -276,5 +273,4 @@ jobs:
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/wg0.conf" ]; then sudo wg-quick down "$RUNNER_TEMP/wg0.conf" || true; fi
-          sudo sed -i '/[[:space:]]k3s--lab\.cloud-ip\.cc$/d' /etc/hosts
           rm -f "$RUNNER_TEMP/wg0.conf" "$RUNNER_TEMP/kubeconfig"

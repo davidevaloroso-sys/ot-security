@@ -2,11 +2,11 @@
 
 ## Stato operativo — 29 settembre 2026
 
-La candidata del job è stata verificata con 97 test Python, sei build Docker, scansioni HIGH/CRITICAL e integrazione completa locale: MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.
+La suite locale aggiornata passa 110 test Python. Le sei build Docker, scansioni HIGH/CRITICAL e integrazione completa della release precedente hanno verificato MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.
 
-Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il run remoto `36615805957` ha superato CI, scansioni, integrazione e publish; il deploy si è fermato sul timeout dell'API prima dell'apply. La correzione della rotta DDNS/VPN è nel commit locale successivo e lo stato effettivo è registrato in [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
+Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il [run remoto 36624149826](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36624149826), sul commit `9435bf8`, ha superato test, sei build, scansioni, integrazione e publish, ma il deploy si è fermato prima dell'apply per il nome DDNS assente dal certificato API. La configurazione ora separa il DDNS pubblico WireGuard dall'API privata verificata per IP; il nuovo rollout deve ancora essere confermato. Dettagli in [docs/K3S-TLS.md](docs/K3S-TLS.md) e [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
 
-Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. L'API K3s e il broker MQTT esterno sono sulla VM **192.168.1.21**, raggiunta dall'API tramite **k3s--lab.cloud-ip.cc**.
+Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. API K3s (`6443`) e broker MQTT (`8883`) sono sulla VM **192.168.1.21**. Il DDNS **k3s--lab.cloud-ip.cc:51820/UDP** individua l'endpoint pubblico WireGuard; attraverso il tunnel il runner interroga direttamente **https://192.168.1.21:6443**.
 
 ```text
 Simulatore ── MQTT TLS/QoS1 ── broker esterno :8883
@@ -71,7 +71,11 @@ Nessun valore segreto è incluso. Preparare file `nome-secret.env` con righe `KE
 | `nodered-auth` | `NODE_RED_ADMIN_USER`, `NODE_RED_ADMIN_PASSWORD_HASH`, `NODE_RED_CREDENTIAL_SECRET`, `INFLUXDB_WRITE_TOKEN` | Nuovi login bcrypt, cifratura stabile e token solo scrittura |
 | `grafana-influxdb` | `INFLUXDB_READ_TOKEN` | Nuovo token solo lettura |
 
-Restano invariati i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY`, `WG_ENDPOINT`, `K3S_KUBECONFIG`. Nel kubeconfig del Secret `K3S_KUBECONFIG`, il campo `clusters[].cluster.server` deve essere `https://k3s--lab.cloud-ip.cc:6443`; il certificato API deve contenere questo DNS SAN. Il job, dopo aver attivato WireGuard, risolve temporaneamente questo hostname su `192.168.1.21` nel runner: il nome resta quello del certificato, mentre il traffico segue la rotta privata della VPN verso la VM K3s, che ospita anche il broker MQTT. Nessun nuovo `WG_CLIENT_CONFIG` è richiesto. Le build Grafana/InfluxDB usano anche `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` (PAT con sola lettura), confermati dal proprietario: autenticazione a `dhi.io` limitata ai runner di build. Le sei immagini finali sono pubblicate su GHCR; il cluster non riceve il PAT Docker Hub. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
+La CI legge i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY` e `K3S_KUBECONFIG`. L'endpoint pubblico non è una credenziale: `WG_ENDPOINT` è ora configurato nel workflow come `k3s--lab.cloud-ip.cc:51820`; il vecchio Secret omonimo non viene più letto e può rimanere salvato. Non serve un nuovo `WG_CLIENT_CONFIG`.
+
+La CI adatta esclusivamente la copia temporanea del kubeconfig nel runner: imposta il server del contesto attivo a `https://192.168.1.21:6443`, rimuove un eventuale `tls-server-name` precedente e conserva CA, credenziali e altri contesti. Funziona anche con il Secret già salvato con server DDNS o localhost; il Secret GitHub non viene riscritto. Kubeconfig con verifica TLS disabilitata o proxy vengono rifiutati. Non viene modificato `/etc/hosts`. Il certificato K3s deve essere valido per l'IP **192.168.1.21**; il SAN DNS del DDNS non è richiesto. Per uso manuale, impostare lo stesso endpoint privato nel proprio kubeconfig. Verifica TLS e troubleshooting: [docs/K3S-TLS.md](docs/K3S-TLS.md).
+
+Le build Grafana/InfluxDB usano anche `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` (PAT con sola lettura), confermati dal proprietario: autenticazione a `dhi.io` limitata ai runner di build. Le sei immagini finali sono pubblicate su GHCR; il cluster non riceve il PAT Docker Hub. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
 
 ## Preparazione del broker esterno
 
@@ -89,7 +93,7 @@ Chiudere 1883 dopo aver migrato tutti i client. Il plaintext è ammesso solo nei
 
 Prima di un aggiornamento salvare PVC, database e credenziali. Le immagini passano a Node-RED 5.0.7, Grafana 13.2.2 e InfluxDB 2.9.1: provare la migrazione su copie dei dati. InfluxDB 2.9 memorizza hash dei token; conservarne i valori nel gestore segreti prima dell'upgrade. Un semplice rollback dell'immagine non equivale a ripristinare il database. Il PVC `influxdb-config-pvc` conserva anche la configurazione CLI: includerlo nei backup e limitarne l'accesso.
 
-Servono nodi Linux/amd64 Ready, storage class, immagini GHCR accessibili, CA, broker TLS e kubeconfig verificato per `https://k3s--lab.cloud-ip.cc:6443`. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout. Il preflight richiede anche il permesso RBAC di leggere i nodi.
+Servono nodi Linux/amd64 Ready, storage class, immagini GHCR accessibili, CA, broker TLS e kubeconfig verificato per `https://192.168.1.21:6443` attraverso la VPN o la LAN. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout. Il preflight richiede anche il permesso RBAC di leggere i nodi.
 
 ```bash
 export SECRET_DIR='/percorso/protetto/segreti-lab'
