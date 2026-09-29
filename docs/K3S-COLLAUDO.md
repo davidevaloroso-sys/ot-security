@@ -1,10 +1,10 @@
 # Attività che richiedono il laboratorio acceso
 
-Server/API e broker previsti: **192.168.1.12**. Il proprietario ha autorizzato deploy e uso dei Secret GitHub. Il job è abilitato sui push a main dopo tutti i gate; questa checklist non attesta prove già eseguite. Consultare `REMEDIATION-STATUS.md` per gli esiti effettivi.
+API K3s prevista: **k3s--lab.cloud-ip.cc**; broker MQTT: **192.168.1.12**. Il proprietario ha autorizzato deploy e uso dei Secret GitHub. Il job è abilitato sui push a main dopo tutti i gate; questa checklist non attesta prove già eseguite. Consultare `REMEDIATION-STATUS.md` per gli esiti effettivi.
 
 | Passo | Cosa verificare sul server | Esito atteso |
 |---|---|---|
-| Accesso | VPN, route verso `.12`, kubeconfig e CA dell'API | `python scripts/preflight.py --cluster-only` passa; API risponde senza opzioni insecure |
+| Accesso | VPN, DNS/routing verso `k3s--lab.cloud-ip.cc`, kubeconfig e CA dell'API | `python scripts/preflight.py --cluster-only` passa; API risponde senza opzioni insecure |
 | Inventario | Versione K3s, architettura dei nodi, capacità RAM/CPU, storage class, PVC e installazioni precedenti | Nodi Ready; immagini compatibili con l'architettura; spazio sufficiente |
 | Backup | Esportazione dei dati InfluxDB, dati Grafana/Node-RED, configurazione broker e conservazione sicura dei Secret | Copie esterne alla VM con una prova di ripristino; nessuna sovrascrittura dei PVC originali |
 | Migrazione | Compatibilità dei dati esistenti con InfluxDB 2.9.1, Grafana 13.2.2 e Node-RED 5.0.7 | Migrazione su copia verificata prima del rollout; permessi UID/GID corretti |

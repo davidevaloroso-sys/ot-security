@@ -2,7 +2,7 @@
 
 ## Stato della release
 
-Il proprietario ha autorizzato correzioni, push diretto a `main`, test e deploy K3s; ha confermato l'uso dei Secret GitHub WireGuard/Kubeconfig già configurati. Docker Desktop Linux è ora disponibile. Il PC non ha un contesto Kubernetes locale: il percorso previsto verso `192.168.1.12` è il job GitHub nell'environment `lab`.
+Il proprietario ha autorizzato correzioni, push diretto a `main`, test e deploy K3s; ha confermato l'uso dei Secret GitHub WireGuard/Kubeconfig già configurati. Docker Desktop Linux è ora disponibile. Il PC non ha un contesto Kubernetes locale: il job GitHub nell'environment `lab` raggiunge l'API tramite `k3s--lab.cloud-ip.cc`, mentre `192.168.1.12` resta l'indirizzo del broker MQTT.
 
 La candidata locale ha completato i controlli riportati sotto. CI remota, pubblicazione e deploy di queste modifiche devono ancora essere verificati. Nessun risultato locale viene presentato come rollout sul laboratorio.
 

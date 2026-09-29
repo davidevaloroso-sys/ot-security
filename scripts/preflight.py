@@ -6,6 +6,8 @@ import subprocess
 from urllib.parse import urlsplit
 import yaml
 
+K3S_API_HOST = 'k3s--lab.cloud-ip.cc'
+
 
 def inspect(directory):
     documents = [doc for path in sorted(directory.glob('*.yaml')) for doc in yaml.safe_load_all(path.read_text(encoding='utf-8')) if doc]
@@ -48,8 +50,8 @@ def check_cluster():
     config = kubectl_json('config', 'view', '--minify')
     cluster = config['clusters'][0]['cluster']
     endpoint = urlsplit(cluster['server'])
-    if endpoint.scheme != 'https' or endpoint.hostname != '192.168.1.12' or cluster.get('insecure-skip-tls-verify'):
-        raise ValueError('Expected verified K3s API on 192.168.1.12')
+    if endpoint.scheme != 'https' or endpoint.hostname != K3S_API_HOST or cluster.get('insecure-skip-tls-verify'):
+        raise ValueError(f'Expected verified K3s API on {K3S_API_HOST}')
 
 
 def check_nodes():

@@ -72,3 +72,20 @@ def test_release_accepts_ready_linux_amd64_and_ignores_cordoned_nodes(monkeypatc
     nodes = [node(), node(architecture='arm64', cordoned=True)]
     monkeypatch.setattr(preflight, 'kubectl_json', lambda *args: {'items': nodes})
     preflight.check_nodes()
+
+
+@pytest.mark.parametrize('server', [
+    'https://k3s--lab.cloud-ip.cc:6443',
+    'http://k3s--lab.cloud-ip.cc:6443',
+    'https://192.168.1.12:6443',
+])
+def test_cluster_requires_verified_ddns_api_endpoint(monkeypatch, server):
+    preflight = module('preflight')
+    monkeypatch.setattr(preflight, 'kubectl_json', lambda *args: {
+        'clusters': [{'cluster': {'server': server}}],
+    })
+    if server.startswith('https://k3s--lab.cloud-ip.cc:'):
+        preflight.check_cluster()
+    else:
+        with pytest.raises(ValueError, match='k3s--lab.cloud-ip.cc'):
+            preflight.check_cluster()

@@ -6,7 +6,7 @@ La candidata del job è stata verificata con 94 test Python, sei build Docker, s
 
 Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il deploy è autorizzato e abilitato sui push a `main`, subordinato a CI, pubblicazione, preflight e dry-run server. La verifica sul cluster tramite i Secret GitHub deve ancora concludersi: lo stato effettivo è registrato in [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
 
-Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. Il server K3s e il broker esterno restano **192.168.1.12**.
+Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. L'API K3s è raggiunta tramite **k3s--lab.cloud-ip.cc**; il broker MQTT esterno resta **192.168.1.12**.
 
 ```text
 Simulatore ── MQTT TLS/QoS1 ── broker esterno :8883
@@ -71,7 +71,7 @@ Nessun valore segreto è incluso. Preparare file `nome-secret.env` con righe `KE
 | `nodered-auth` | `NODE_RED_ADMIN_USER`, `NODE_RED_ADMIN_PASSWORD_HASH`, `NODE_RED_CREDENTIAL_SECRET`, `INFLUXDB_WRITE_TOKEN` | Nuovi login bcrypt, cifratura stabile e token solo scrittura |
 | `grafana-influxdb` | `INFLUXDB_READ_TOKEN` | Nuovo token solo lettura |
 
-Restano invariati i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY`, `WG_ENDPOINT`, `K3S_KUBECONFIG`. Nessun nuovo `WG_CLIENT_CONFIG` è richiesto. Le build Grafana/InfluxDB usano anche `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` (PAT con sola lettura), confermati dal proprietario: autenticazione a `dhi.io` limitata ai runner di build. Le sei immagini finali sono pubblicate su GHCR; il cluster non riceve il PAT Docker Hub. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
+Restano invariati i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY`, `WG_ENDPOINT`, `K3S_KUBECONFIG`. Nel kubeconfig del Secret `K3S_KUBECONFIG`, il campo `clusters[].cluster.server` deve essere `https://k3s--lab.cloud-ip.cc:6443`; il certificato API deve contenere questo DNS SAN e la risoluzione DNS deve essere raggiungibile attraverso la VPN. Nessun nuovo `WG_CLIENT_CONFIG` è richiesto. Le build Grafana/InfluxDB usano anche `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` (PAT con sola lettura), confermati dal proprietario: autenticazione a `dhi.io` limitata ai runner di build. Le sei immagini finali sono pubblicate su GHCR; il cluster non riceve il PAT Docker Hub. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
 
 ## Preparazione del broker esterno
 
@@ -89,7 +89,7 @@ Chiudere 1883 dopo aver migrato tutti i client. Il plaintext è ammesso solo nei
 
 Prima di un aggiornamento salvare PVC, database e credenziali. Le immagini passano a Node-RED 5.0.7, Grafana 13.2.2 e InfluxDB 2.9.1: provare la migrazione su copie dei dati. InfluxDB 2.9 memorizza hash dei token; conservarne i valori nel gestore segreti prima dell'upgrade. Un semplice rollback dell'immagine non equivale a ripristinare il database. Il PVC `influxdb-config-pvc` conserva anche la configurazione CLI: includerlo nei backup e limitarne l'accesso.
 
-Servono nodi Linux/amd64 Ready, storage class, immagini GHCR accessibili, CA, broker TLS e kubeconfig verificato per `https://192.168.1.12:6443`. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout. Il preflight richiede anche il permesso RBAC di leggere i nodi.
+Servono nodi Linux/amd64 Ready, storage class, immagini GHCR accessibili, CA, broker TLS e kubeconfig verificato per `https://k3s--lab.cloud-ip.cc:6443`. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout. Il preflight richiede anche il permesso RBAC di leggere i nodi.
 
 ```bash
 export SECRET_DIR='/percorso/protetto/segreti-lab'
