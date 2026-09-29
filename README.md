@@ -6,7 +6,7 @@ La candidata del job è stata verificata con 94 test Python, sei build Docker, s
 
 Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il run remoto `36615805957` ha superato CI, scansioni, integrazione e publish; il deploy si è fermato sul timeout dell'API prima dell'apply. La correzione della rotta DDNS/VPN è nel commit locale successivo e lo stato effettivo è registrato in [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
 
-Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. L'API K3s è raggiunta tramite **k3s--lab.cloud-ip.cc**; il broker MQTT esterno resta **192.168.1.12**.
+Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. L'API K3s e il broker MQTT esterno sono sulla VM **192.168.1.21**, raggiunta dall'API tramite **k3s--lab.cloud-ip.cc**.
 
 ```text
 Simulatore ── MQTT TLS/QoS1 ── broker esterno :8883
@@ -71,16 +71,16 @@ Nessun valore segreto è incluso. Preparare file `nome-secret.env` con righe `KE
 | `nodered-auth` | `NODE_RED_ADMIN_USER`, `NODE_RED_ADMIN_PASSWORD_HASH`, `NODE_RED_CREDENTIAL_SECRET`, `INFLUXDB_WRITE_TOKEN` | Nuovi login bcrypt, cifratura stabile e token solo scrittura |
 | `grafana-influxdb` | `INFLUXDB_READ_TOKEN` | Nuovo token solo lettura |
 
-Restano invariati i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY`, `WG_ENDPOINT`, `K3S_KUBECONFIG`. Nel kubeconfig del Secret `K3S_KUBECONFIG`, il campo `clusters[].cluster.server` deve essere `https://k3s--lab.cloud-ip.cc:6443`; il certificato API deve contenere questo DNS SAN. Il job, dopo aver attivato WireGuard, risolve temporaneamente questo hostname su `192.168.1.12` nel runner: il nome resta quello del certificato, mentre il traffico segue la rotta privata della VPN e non il percorso pubblico del DDNS. Nessun nuovo `WG_CLIENT_CONFIG` è richiesto. Le build Grafana/InfluxDB usano anche `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` (PAT con sola lettura), confermati dal proprietario: autenticazione a `dhi.io` limitata ai runner di build. Le sei immagini finali sono pubblicate su GHCR; il cluster non riceve il PAT Docker Hub. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
+Restano invariati i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY`, `WG_ENDPOINT`, `K3S_KUBECONFIG`. Nel kubeconfig del Secret `K3S_KUBECONFIG`, il campo `clusters[].cluster.server` deve essere `https://k3s--lab.cloud-ip.cc:6443`; il certificato API deve contenere questo DNS SAN. Il job, dopo aver attivato WireGuard, risolve temporaneamente questo hostname su `192.168.1.21` nel runner: il nome resta quello del certificato, mentre il traffico segue la rotta privata della VPN verso la VM K3s, che ospita anche il broker MQTT. Nessun nuovo `WG_CLIENT_CONFIG` è richiesto. Le build Grafana/InfluxDB usano anche `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` (PAT con sola lettura), confermati dal proprietario: autenticazione a `dhi.io` limitata ai runner di build. Le sei immagini finali sono pubblicate su GHCR; il cluster non riceve il PAT Docker Hub. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
 
 ## Preparazione del broker esterno
 
 Usare `config/mosquitto.conf.example` e `config/mosquitto.acl.example` come riferimenti per il broker esistente. Creare i quattro account con `mosquitto_passwd` interattivo; adattare gli username nelle ACL ai valori già usati, senza rinominare le credenziali audit esistenti. Producer scrive solo temperatura/umidità; IA legge questi topic e scrive anomaly; Node-RED legge i tre topic; audit legge `lab/#`.
 
-Il certificato deve avere **IP SAN 192.168.1.12** e una CA attendibile. Chiave privata solo sul broker. Distribuire la CA pubblica nel ConfigMap `mqtt-ca`, chiave `ca.crt`. Verificare senza disabilitare TLS:
+Il certificato deve avere **IP SAN 192.168.1.21** e una CA attendibile. Chiave privata solo sul broker. Distribuire la CA pubblica nel ConfigMap `mqtt-ca`, chiave `ca.crt`. Verificare senza disabilitare TLS:
 
 ```bash
-openssl s_client -connect 192.168.1.12:8883 -CAfile ca.crt -verify_ip 192.168.1.12 -verify_return_error
+openssl s_client -connect 192.168.1.21:8883 -CAfile ca.crt -verify_ip 192.168.1.21 -verify_return_error
 ```
 
 Chiudere 1883 dopo aver migrato tutti i client. Il plaintext è ammesso solo nei test isolati con entrambe `MQTT_TLS=false` e `MQTT_ALLOW_INSECURE_LOCAL=true`; i manifest non lo abilitano.
@@ -168,7 +168,7 @@ docker build -f platform/influxdb/Dockerfile -t "$IMAGE_NAME:influxdb-$RELEASE_S
 python scripts/integration_test.py "$RELEASE_SHA"
 ```
 
-Il test genera credenziali e certificati temporanei, usa porte casuali su localhost e una rete Docker dedicata. Prova MQTT TLS, inferenza, scrittura reale InfluxDB, token con permessi minimi, autenticazione Node-RED, datasource e ogni query della dashboard Grafana, poi arresto/ripristino del DB. Rimuove esclusivamente i propri container e volumi temporanei. Non usa il broker `192.168.1.12`. Richiede un Docker daemon funzionante; un test saltato non è un test superato.
+Il test genera credenziali e certificati temporanei, usa porte casuali su localhost e una rete Docker dedicata. Prova MQTT TLS, inferenza, scrittura reale InfluxDB, token con permessi minimi, autenticazione Node-RED, datasource e ogni query della dashboard Grafana, poi arresto/ripristino del DB. Rimuove esclusivamente i propri container e volumi temporanei. Non usa il broker `192.168.1.21`. Richiede un Docker daemon funzionante; un test saltato non è un test superato.
 
 Le verifiche di persistenza risolvono la porta pubblicata corrente di InfluxDB anche dopo un riavvio e controllano record CSV effettivi. Le pubblicazioni di test richiedono il PUBACK del broker; un timeout di pubblicazione viene riportato separatamente dal mancato salvataggio nel DB.
 

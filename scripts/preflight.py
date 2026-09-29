@@ -36,8 +36,8 @@ def inspect(directory):
                 name = volume['configMap']['name']
                 if ('ConfigMap', name) not in available and name not in external_maps:
                     raise ValueError('Unresolved ConfigMap: ' + name)
-    if available[('ConfigMap', 'mqtt-config')]['data']['broker'] != '192.168.1.12':
-        raise ValueError('Expected fixed laboratory broker 192.168.1.12')
+    if available[('ConfigMap', 'mqtt-config')]['data']['broker'] != '192.168.1.21':
+        raise ValueError('Expected fixed laboratory broker 192.168.1.21')
     return secrets, external_maps
 
 

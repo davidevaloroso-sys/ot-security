@@ -28,7 +28,7 @@ def test_preflight_rejects_broken_release(tmp_path, damage):
         (tmp_path/'grafana-dashboard.yaml').unlink()
     else:
         target=tmp_path/('mqtt-config.yaml' if damage=='wrong-ip' else 'nodered-deploy.yaml')
-        target.write_text(target.read_text().replace('192.168.1.12', '192.168.1.21') if damage=='wrong-ip' else target.read_text().replace('b'*40,'RELEASE_SHA'))
+        target.write_text(target.read_text().replace('192.168.1.21', '192.168.1.12') if damage=='wrong-ip' else target.read_text().replace('b'*40,'RELEASE_SHA'))
     with pytest.raises(ValueError):
         module('preflight').inspect(tmp_path)
 

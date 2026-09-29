@@ -1,14 +1,14 @@
 # Attività che richiedono il laboratorio acceso
 
-API K3s prevista: **k3s--lab.cloud-ip.cc**; broker MQTT: **192.168.1.12**. Il proprietario ha autorizzato deploy e uso dei Secret GitHub. Il job è abilitato sui push a main dopo tutti i gate; questa checklist non attesta prove già eseguite. Consultare `REMEDIATION-STATUS.md` per gli esiti effettivi.
+API K3s e broker MQTT sulla VM: **192.168.1.21**; API esposta al job come **k3s--lab.cloud-ip.cc**. Il proprietario ha autorizzato deploy e uso dei Secret GitHub. Il job è abilitato sui push a main dopo tutti i gate; questa checklist non attesta prove già eseguite. Consultare `REMEDIATION-STATUS.md` per gli esiti effettivi.
 
 | Passo | Cosa verificare sul server | Esito atteso |
 |---|---|---|
-| Accesso | VPN, kubeconfig/CA per `k3s--lab.cloud-ip.cc` e route privata verso `.12` | `python scripts/preflight.py --cluster-only` passa; API risponde senza opzioni insecure |
+| Accesso | VPN, kubeconfig/CA per `k3s--lab.cloud-ip.cc` e route privata verso `192.168.1.21` | `python scripts/preflight.py --cluster-only` passa; API risponde senza opzioni insecure |
 | Inventario | Versione K3s, architettura dei nodi, capacità RAM/CPU, storage class, PVC e installazioni precedenti | Nodi Ready; immagini compatibili con l'architettura; spazio sufficiente |
 | Backup | Esportazione dei dati InfluxDB, dati Grafana/Node-RED, configurazione broker e conservazione sicura dei Secret | Copie esterne alla VM con una prova di ripristino; nessuna sovrascrittura dei PVC originali |
 | Migrazione | Compatibilità dei dati esistenti con InfluxDB 2.9.1, Grafana 13.2.2 e Node-RED 5.0.7 | Migrazione su copia verificata prima del rollout; permessi UID/GID corretti |
-| MQTT | Listener 8883, certificato con IP SAN `.12`, CA, account e ACL per i quattro ruoli | TLS verificato; credenziali errate e operazioni fuori ruolo respinte; persistenza broker attiva |
+| MQTT | Listener 8883, certificato con IP SAN `.21`, CA, account e ACL per i quattro ruoli | TLS verificato; credenziali errate e operazioni fuori ruolo respinte; persistenza broker attiva |
 | Secret | Confronto dei nomi/chiavi documentati con quelli presenti, senza esporre valori | `mqtt-credentials` e `observability-secrets` originali conservati; nuove credenziali separate |
 | Token InfluxDB | Creazione sul bucket reale dei token write Node-RED e read Grafana | Grafana non scrive, Node-RED non legge o amministra il DB; token conservati nel gestore segreti |
 | Registry | Accesso dei nodi alle sei immagini GHCR dello SHA pubblicato | Nessun `ImagePullBackOff`; credenziali registry se il package è privato |

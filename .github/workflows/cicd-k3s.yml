@@ -245,16 +245,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wireguard
           umask 077
-          printf '[Interface]\nAddress = 10.6.0.2/32\nPrivateKey = %s\n\n[Peer]\nPublicKey = %s\nEndpoint = %s\nAllowedIPs = 192.168.1.12/32,10.42.0.0/16,10.43.0.0/16\nPersistentKeepalive = 25\n' "$WG_PRIVATE" "$WG_PUBLIC" "$WG_ENDPOINT" > "$RUNNER_TEMP/wg0.conf"
+          printf '[Interface]\nAddress = 10.6.0.2/32\nPrivateKey = %s\n\n[Peer]\nPublicKey = %s\nEndpoint = %s\nAllowedIPs = 192.168.1.21/32,10.42.0.0/16,10.43.0.0/16\nPersistentKeepalive = 25\n' "$WG_PRIVATE" "$WG_PUBLIC" "$WG_ENDPOINT" > "$RUNNER_TEMP/wg0.conf"
           printf '%s\n' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
           sudo wg-quick up "$RUNNER_TEMP/wg0.conf"
           # Keep the certificate/kubeconfig hostname while forcing the API traffic
           # through the private address covered by the WireGuard route. Public DDNS
           # resolution would otherwise bypass the tunnel on the GitHub runner.
           sudo sed -i '/[[:space:]]k3s--lab\.cloud-ip\.cc$/d' /etc/hosts
-          printf '192.168.1.12 k3s--lab.cloud-ip.cc\n' | sudo tee -a /etc/hosts >/dev/null
+          printf '192.168.1.21 k3s--lab.cloud-ip.cc\n' | sudo tee -a /etc/hosts >/dev/null
           getent hosts k3s--lab.cloud-ip.cc
-          ip route get 192.168.1.12
+          ip route get 192.168.1.21
           echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
       - name: Validate API and deploy versioned workloads
         env:
