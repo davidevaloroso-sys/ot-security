@@ -7,6 +7,6 @@
   "node-red": {"nodes": {"ot-ingest": "ot-ingest.js"}},
   "scripts": {"test": "node --test test/*.test.js"},
   "dependencies": {"mqtt": "5.16.0"},
-  "devDependencies": {"aedes": "0.51.3"},
+  "devDependencies": {"aedes": "1.2.0"},
   "overrides": {"uuid": "11.1.1"}
 }
