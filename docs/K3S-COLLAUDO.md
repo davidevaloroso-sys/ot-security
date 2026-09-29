@@ -11,7 +11,7 @@ Server/API e broker previsti: **192.168.1.12**. Il proprietario ha autorizzato d
 | MQTT | Listener 8883, certificato con IP SAN `.12`, CA, account e ACL per i quattro ruoli | TLS verificato; credenziali errate e operazioni fuori ruolo respinte; persistenza broker attiva |
 | Secret | Confronto dei nomi/chiavi documentati con quelli presenti, senza esporre valori | `mqtt-credentials` e `observability-secrets` originali conservati; nuove credenziali separate |
 | Token InfluxDB | Creazione sul bucket reale dei token write Node-RED e read Grafana | Grafana non scrive, Node-RED non legge o amministra il DB; token conservati nel gestore segreti |
-| Registry | Accesso dei nodi alle cinque immagini GHCR dello SHA pubblicato e a InfluxDB DHI fissata | Nessun `ImagePullBackOff`; credenziali registry se il package è privato |
+| Registry | Accesso dei nodi alle sei immagini GHCR dello SHA pubblicato | Nessun `ImagePullBackOff`; credenziali registry se il package è privato |
 | Preflight | Rendering della release approvata e risoluzione Secret/ConfigMap/PVC | `python scripts/preflight.py rendered` e `kubectl apply --dry-run=server -f rendered` passano |
 | Rollout | Applicazione dei manifest e attesa dei sei deployment | Tutti Ready; nessun CrashLoop; Node-RED diventa Ready dopo una scrittura valida |
 | Dashboard | Login, datasource, temperatura/umidità, ultima lettura e storico anomalie | Dati recenti e coerenti con i messaggi pubblicati, nessun errore Flux |
@@ -33,6 +33,6 @@ I comandi di bootstrap e creazione Secret sono nel README. Non incollare passwor
 
 ## Limiti indipendenti dal server
 
-Il test Docker completo e le scansioni immagini possono essere eseguiti in CI anche con k3s spento. Un runner non disponibile, un blocco del registry o una vulnerabilità upstream senza correzione sono impedimenti separati: accendere la VM non li risolve. Prima del deploy verificare l'esito effettivo della CI e l'esistenza dei cinque tag pubblicati. Il preflight rifiuta nodi schedulabili diversi da Linux/amd64; lo smoke `postdeploy_check.py` verifica servizi, query della release e telemetria recente senza provocare guasti sul cluster.
+Il test Docker completo e le scansioni immagini possono essere eseguiti in CI anche con k3s spento. Un runner non disponibile, un blocco del registry o una vulnerabilità upstream senza correzione sono impedimenti separati: accendere la VM non li risolve. Prima del deploy verificare l'esito effettivo della CI e l'esistenza dei sei tag pubblicati. Il preflight rifiuta nodi schedulabili diversi da Linux/amd64; lo smoke `postdeploy_check.py` verifica servizi, query della release e telemetria recente senza provocare guasti sul cluster.
 
 Per dati reali occorre inoltre concordare provenienza, frequenza e schema dei sensori, validare il modello su dati indipendenti e definire soglie/costi dei falsi allarmi. Le letture dello stesso sensore/tipo nello stesso secondo si sovrascrivono nel contratto attuale. OpenPLC richiede un collaudo distinto dell'Editor, del programma PLC e dei protocolli: non è collegato alla pipeline del simulatore.

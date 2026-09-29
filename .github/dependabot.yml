@@ -1,6 +1,10 @@
 version: 2
 updates:
   - package-ecosystem: "docker"
+    directory: "/platform/influxdb"
+    schedule:
+      interval: weekly
+  - package-ecosystem: "docker"
     directory: "/platform/grafana"
     schedule:
       interval: weekly

@@ -3,5 +3,5 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {"node-red": "5.0.7"},
-  "overrides": {"qs": "6.16.0"}
+  "overrides": {"qs": "6.16.0", "ip-address": "10.7.2", "multer": "2.4.0", "undici": "6.28.1"}
 }

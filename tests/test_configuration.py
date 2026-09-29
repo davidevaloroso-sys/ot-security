@@ -53,7 +53,7 @@ def test_release_renderer_changes_only_output(tmp_path):
     module.render('a'*40,tmp_path)
     for p in tmp_path.glob('*.yaml'):
         assert 'RELEASE_SHA' not in p.read_text()
-    for name in ('ia-consumer', 'raspi-simulator', 'ot-consumer', 'nodered', 'grafana'):
+    for name in ('ia-consumer', 'raspi-simulator', 'ot-consumer', 'nodered', 'grafana', 'influxdb'):
         assert 'a'*40 in (tmp_path/f'{name}-deploy.yaml').read_text()
     assert (tmp_path/'grafana-dashboard.yaml').exists()
     assert 'RELEASE_SHA' in (ROOT/'k3s/ia-consumer-deploy.yaml').read_text()

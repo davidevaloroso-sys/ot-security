@@ -2,7 +2,7 @@
 
 ## Stato operativo — 29 settembre 2026
 
-La candidata del job è stata verificata con 94 test Python, cinque build Docker, scansioni HIGH/CRITICAL e integrazione completa locale: MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.
+La candidata del job è stata verificata con 94 test Python, sei build Docker, scansioni HIGH/CRITICAL e integrazione completa locale: MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.
 
 Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il deploy è autorizzato e abilitato sui push a `main`, subordinato a CI, pubblicazione, preflight e dry-run server. La verifica sul cluster tramite i Secret GitHub deve ancora concludersi: lo stato effettivo è registrato in [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
 
@@ -71,7 +71,7 @@ Nessun valore segreto è incluso. Preparare file `nome-secret.env` con righe `KE
 | `nodered-auth` | `NODE_RED_ADMIN_USER`, `NODE_RED_ADMIN_PASSWORD_HASH`, `NODE_RED_CREDENTIAL_SECRET`, `INFLUXDB_WRITE_TOKEN` | Nuovi login bcrypt, cifratura stabile e token solo scrittura |
 | `grafana-influxdb` | `INFLUXDB_READ_TOKEN` | Nuovo token solo lettura |
 
-Restano invariati i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY`, `WG_ENDPOINT`, `K3S_KUBECONFIG`. Nessun nuovo `WG_CLIENT_CONFIG` è richiesto. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
+Restano invariati i Secret GitHub `WG_CLIENT_PRIVATE_KEY`, `WG_SERVER_PUBLIC_KEY`, `WG_ENDPOINT`, `K3S_KUBECONFIG`. Nessun nuovo `WG_CLIENT_CONFIG` è richiesto. Le build Grafana/InfluxDB usano anche `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` (PAT con sola lettura), confermati dal proprietario: autenticazione a `dhi.io` limitata ai runner di build. Le sei immagini finali sono pubblicate su GHCR; il cluster non riceve il PAT Docker Hub. Base64 nei Secret Kubernetes non è cifratura: RBAC, backup e cifratura at rest dipendono dal cluster.
 
 ## Preparazione del broker esterno
 
@@ -89,11 +89,12 @@ Chiudere 1883 dopo aver migrato tutti i client. Il plaintext è ammesso solo nei
 
 Prima di un aggiornamento salvare PVC, database e credenziali. Le immagini passano a Node-RED 5.0.7, Grafana 13.2.2 e InfluxDB 2.9.1: provare la migrazione su copie dei dati. InfluxDB 2.9 memorizza hash dei token; conservarne i valori nel gestore segreti prima dell'upgrade. Un semplice rollback dell'immagine non equivale a ripristinare il database. Il PVC `influxdb-config-pvc` conserva anche la configurazione CLI: includerlo nei backup e limitarne l'accesso.
 
-Servono nodi Linux/amd64 Ready, storage class, immagini GHCR e `dhi.io` accessibili, CA, broker TLS e kubeconfig verificato per `https://192.168.1.12:6443`. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout. Il preflight richiede anche il permesso RBAC di leggere i nodi.
+Servono nodi Linux/amd64 Ready, storage class, immagini GHCR accessibili, CA, broker TLS e kubeconfig verificato per `https://192.168.1.12:6443`. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout. Il preflight richiede anche il permesso RBAC di leggere i nodi.
 
 ```bash
 export SECRET_DIR='/percorso/protetto/segreti-lab'
 export MQTT_CA_FILE='/percorso/ca.crt'
+export RELEASE_SHA='<SHA completo già pubblicato dalla CI>'
 bash scripts/bootstrap.sh
 ```
 
@@ -122,7 +123,7 @@ done
 python scripts/postdeploy_check.py
 ```
 
-Usare lo SHA completo di una release pubblicata con CI verde. Il renderer genera anche i tre ConfigMap Grafana e la checksum di provisioning; non modifica i sorgenti. Non applicare direttamente `k3s/`, che contiene tag `RELEASE_SHA`. I cinque tag di rilascio sono `<sha>`, `raspi-simulator-<sha>`, `ia-consumer-<sha>`, `nodered-<sha>` e `grafana-<sha>`. Dopo rotazione dei Secret riavviare consapevolmente i pod interessati.
+Usare lo SHA completo di una release pubblicata con CI verde. Il renderer genera anche i tre ConfigMap Grafana e la checksum di provisioning; non modifica i sorgenti. Non applicare direttamente `k3s/`, che contiene tag `RELEASE_SHA`. I sei tag di rilascio sono `<sha>`, `raspi-simulator-<sha>`, `ia-consumer-<sha>`, `nodered-<sha>`, `grafana-<sha>` e `influxdb-<sha>`. Dopo rotazione dei Secret riavviare consapevolmente i pod interessati.
 
 Accesso alle UI tramite port-forward su localhost; login con i rispettivi account:
 
@@ -153,7 +154,7 @@ bash scripts/validate_config.sh
 (cd IA-integration/ia-consumer && python train_model.py)
 ```
 
-Per provare l'intero stack senza il cluster, costruire le cinque immagini con lo stesso SHA e lanciare:
+Per provare l'intero stack senza il cluster, autenticarsi a `dhi.io` con `docker login dhi.io` usando un PAT con sola lettura, costruire le sei immagini con lo stesso SHA e lanciare:
 
 ```bash
 export RELEASE_SHA="$(git rev-parse HEAD)"
@@ -163,6 +164,7 @@ docker build -f IA-integration/raspi-simulator/Dockerfile -t "$IMAGE_NAME:raspi-
 docker build -f IA-integration/ia-consumer/Dockerfile -t "$IMAGE_NAME:ia-consumer-$RELEASE_SHA" .
 docker build -f platform/nodered/Dockerfile -t "$IMAGE_NAME:nodered-$RELEASE_SHA" .
 docker build -f platform/grafana/Dockerfile -t "$IMAGE_NAME:grafana-$RELEASE_SHA" .
+docker build -f platform/influxdb/Dockerfile -t "$IMAGE_NAME:influxdb-$RELEASE_SHA" .
 python scripts/integration_test.py "$RELEASE_SHA"
 ```
 
@@ -174,7 +176,7 @@ Lo smoke aggiuntivo `platform/nodered/test/runtime.cjs`, con `NODE_RED_RUNTIME` 
 
 ## CI e qualità del modello
 
-Le PR e i push a main eseguono test, Bandit, validazione schema, training, cinque build e Trivy HIGH/CRITICAL; nessuna pubblicazione precede scansioni e integrazione. Solo main pubblica le immagini già provate. Modifiche limitate a README e `docs/` non avviano una nuova release. Actions e basi container sono fissate; Dependabot aggiorna Python, Docker, npm e Actions. La scansione può bloccare anche dipendenze upstream senza fix: non ignorare automaticamente gli avvisi.
+Le PR e i push a main eseguono test, Bandit, validazione schema, training, sei build e Trivy HIGH/CRITICAL; nessuna pubblicazione precede scansioni e integrazione. Solo main pubblica le immagini già provate. Modifiche limitate a README e `docs/` non avviano una nuova release. Actions e basi container sono fissate; Dependabot aggiorna Python, Docker, npm e Actions. La scansione può bloccare anche dipendenze upstream senza fix: non ignorare automaticamente gli avvisi.
 
 Grafana viene costruita dalla base DHI 13.2.2 con il solo plugin InfluxDB 13.1.6, verificato tramite checksum e caricato da un percorso nell'immagine. Installazione automatica dei plugin e aggiornamenti sono disabilitati; il PVC non sostituisce il plugin scansionato. La scansione della candidata è integrata con l'SBOM SPDX firmato della base, preservato in `platform/grafana/security/`: aggiornare base e inventario insieme, seguendo [la procedura](docs/GRAFANA-SBOM.md).
 

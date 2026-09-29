@@ -91,6 +91,9 @@ jobs:
           - name: grafana
             dockerfile: platform/grafana/Dockerfile
             prefix: grafana-
+          - name: influxdb
+            dockerfile: platform/influxdb/Dockerfile
+            prefix: influxdb-
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -99,6 +102,13 @@ jobs:
         with:
           name: trained-model
           path: IA-integration/ia-consumer
+      - name: Authenticate to hardened image registry
+        if: matrix.name == 'grafana' || matrix.name == 'influxdb'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build locally without publishing
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
@@ -137,7 +147,7 @@ jobs:
           for archive in images/*/image.tar; do docker load -i "$archive"; done
           mkdir -p scan-reports
           result=0
-          for prefix in '' raspi-simulator- ia-consumer- nodered-; do
+          for prefix in '' raspi-simulator- ia-consumer- nodered- influxdb-; do
             bash scripts/scan_image.sh "$IMAGE_NAME:$prefix$GITHUB_SHA" "scan-reports/${prefix}application.json" || result=1
           done
           python scripts/verify_platform_sbom.py
@@ -148,10 +158,6 @@ jobs:
         run: |
           mkdir -p scan-reports
           result=0
-          for app in influxdb; do
-            image="$(awk '$1 == "image:" {print $2; exit}' "k3s/$app-deploy.yaml")"
-            bash scripts/scan_image.sh "$image" "scan-reports/$app.json" || result=1
-          done
           image="$(awk -F "'" '/^BROKER_IMAGE =/ {print $2}' scripts/integration_test.py)"
           bash scripts/scan_image.sh "$image" scan-reports/broker.json || result=1
           exit "$result"
@@ -198,7 +204,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: |
           for archive in images/*/image.tar; do docker load -i "$archive"; done
-          for prefix in '' raspi-simulator- ia-consumer- nodered-; do
+          for prefix in '' raspi-simulator- ia-consumer- nodered- influxdb-; do
             docker push "$IMAGE_NAME:$prefix$GITHUB_SHA"
           done
           docker push "$IMAGE_NAME:grafana-$GITHUB_SHA"

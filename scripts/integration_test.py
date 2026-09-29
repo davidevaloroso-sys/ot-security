@@ -19,7 +19,6 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import paho.mqtt.client as mqtt
-import yaml
 from provision_influx_tokens import scoped_tokens
 from initialize_influx import initialize
 
@@ -108,11 +107,6 @@ class Stack:
         subprocess.run(['docker', 'network', 'rm', self.prefix], capture_output=True, timeout=60, check=False)
 
 
-def platform_image(name):
-    documents = yaml.safe_load_all((ROOT/'k3s'/f'{name}-deploy.yaml').read_text())
-    return next(d for d in documents if d['kind'] == 'Deployment')['spec']['template']['spec']['containers'][0]['image']
-
-
 def reading_persisted(stack, token, query, device):
     # Resolve on each query: Docker can reallocate ephemeral ports on restart.
     url = 'http://' + stack.endpoint('influxdb', 8086) + '/api/v2/query?org=lab'
@@ -160,7 +154,7 @@ def run(revision):
             stack.start('broker',BROKER_IMAGE,ports=(8883,),mounts=((config,'/mosquitto/config'),))
             influx_env={'INFLUXD_BOLT_PATH':'/var/lib/influxdb2/influxd.bolt','INFLUXD_ENGINE_PATH':'/var/lib/influxdb2/engine','INFLUXD_SQLITE_PATH':'/var/lib/influxdb2/influxd.sqlite'}
             volume = stack.volume('influx-data', 1000, image + revision)
-            stack.start('influxdb',platform_image('influxdb'),env=influx_env,ports=(8086,),extra=('--user','1000:1000','--read-only','--tmpfs','/tmp:uid=1000,gid=1000','-v',volume + ':/var/lib/influxdb2','--cap-drop','ALL','--security-opt','no-new-privileges'))
+            stack.start('influxdb',image+'influxdb-'+revision,env=influx_env,ports=(8086,),extra=('--user','1000:1000','--read-only','--tmpfs','/tmp:uid=1000,gid=1000','-v',volume + ':/var/lib/influxdb2','--cap-drop','ALL','--security-opt','no-new-privileges'))
             influx='http://'+stack.endpoint('influxdb',8086)
             until(lambda: request(influx+'/health')[0]==200,'InfluxDB startup')
             assert initialize(influx,'testadmin',password,admin_token,'lab','ot')
@@ -246,7 +240,7 @@ def run(revision):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('revision',help='Full SHA of the five locally built/scanned images')
+    parser.add_argument('revision',help='Full SHA of the six locally built/scanned images')
     args=parser.parse_args()
     if len(args.revision)!=40 or any(c not in '0123456789abcdef' for c in args.revision):
         parser.error('Expected full commit SHA')
