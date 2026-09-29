@@ -25,7 +25,7 @@ Il run remoto [36615805957](https://github.com/davidevaloroso-sys/ot-security/ac
 
 | Verifica | Esito |
 |---|---|
-| Pytest, ambiente Python 3.12.14 | 94 test passati |
+| Pytest, ambiente Python 3.12.14 | 97 test passati |
 | Cinque build Docker Linux | Passate; Python runtime 3.11.16 |
 | Caricamento modello IA, UID 10001, filesystem read-only, rete assente | Passato |
 | Portabilità modello su 10.000 righe | Differenza massima probabilità 0.0, classi identiche a soglia 0.70 |

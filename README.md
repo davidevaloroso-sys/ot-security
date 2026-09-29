@@ -2,7 +2,7 @@
 
 ## Stato operativo — 29 settembre 2026
 
-La candidata del job è stata verificata con 94 test Python, sei build Docker, scansioni HIGH/CRITICAL e integrazione completa locale: MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.
+La candidata del job è stata verificata con 97 test Python, sei build Docker, scansioni HIGH/CRITICAL e integrazione completa locale: MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.
 
 Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il run remoto `36615805957` ha superato CI, scansioni, integrazione e publish; il deploy si è fermato sul timeout dell'API prima dell'apply. La correzione della rotta DDNS/VPN è nel commit locale successivo e lo stato effettivo è registrato in [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
 
