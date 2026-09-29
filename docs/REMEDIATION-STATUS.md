@@ -6,6 +6,8 @@ Il proprietario ha autorizzato correzioni, push diretto a `main`, test e deploy 
 
 La candidata locale ha completato i controlli riportati sotto. CI remota, pubblicazione e deploy di queste modifiche devono ancora essere verificati. Nessun risultato locale viene presentato come rollout sul laboratorio.
 
+Il run remoto [36615805957](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36615805957) sul commit `2189c19` ha superato test/training, sei build, scansioni, integrazione e pubblicazione delle immagini. Il job `deploy_k3s` ha validato il nome DDNS nel kubeconfig e la VPN, ma `kubectl get --raw=/version` è terminato dopo 30 secondi con `Client.Timeout exceeded while awaiting headers`, prima di qualsiasi dry-run o apply. La causa operativa è coerente con una risoluzione pubblica del DDNS fuori dalla rotta WireGuard; il commit locale `879c201` aggiunge una mappatura temporanea del nome a `192.168.1.12` nel runner, preservando hostname e verifica TLS.
+
 ## Cronologia e correzioni
 
 - Base iniziale analizzata: `0cb9d376d490579d7110350305967920433a7251`.

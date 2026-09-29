@@ -4,7 +4,7 @@
 
 La candidata del job è stata verificata con 94 test Python, sei build Docker, scansioni HIGH/CRITICAL e integrazione completa locale: MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.
 
-Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il deploy è autorizzato e abilitato sui push a `main`, subordinato a CI, pubblicazione, preflight e dry-run server. La verifica sul cluster tramite i Secret GitHub deve ancora concludersi: lo stato effettivo è registrato in [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
+Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il run remoto `36615805957` ha superato CI, scansioni, integrazione e publish; il deploy si è fermato sul timeout dell'API prima dell'apply. La correzione della rotta DDNS/VPN è nel commit locale successivo e lo stato effettivo è registrato in [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
 
 Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. L'API K3s è raggiunta tramite **k3s--lab.cloud-ip.cc**; il broker MQTT esterno resta **192.168.1.12**.
 
