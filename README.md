@@ -1,5 +1,11 @@
 # OT Security — laboratorio MQTT, IA e osservabilità
 
+## Stato operativo — 29 settembre 2026
+
+Il commit `60ac14165ce8180119e851780d5a0f33cfb1a026` è stato verificato con 65 test Python, 28 test Node-RED, runtime Node-RED reale, training del modello, preflight manifest e integrazione Docker in CI. L'integrazione completa è passata, compreso il recupero dopo il riavvio di InfluxDB.
+
+La pubblicazione delle immagini resta bloccata dal gate Trivy: la CI segnala vulnerabilità HIGH/CRITICAL senza fix nelle immagini Python e numerose vulnerabilità HIGH nei binari upstream di InfluxDB e nei componenti Grafana. Non sono state aggiunte esclusioni per forzare il rilascio. Il job `deploy_k3s` resta disabilitato; in questa sessione non è stato eseguito alcun deploy perché l'ambiente locale non dispone di kubeconfig/cluster attivo e Docker Desktop non è disponibile. Le attività, i risultati e i blocchi sono registrati in `docs/REMEDIATION-STATUS.md`.
+
 Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. Il server K3s e il broker esterno restano **192.168.1.12**. Il deploy del cluster è disabilitato in CI fino al collaudo concordato con il proprietario della VM.
 
 ```text

@@ -3,6 +3,12 @@
 Base analizzata: `0cb9d376d490579d7110350305967920433a7251`.
 Queste modifiche non costituiscono una release collaudata e non sono state distribuite sulla VM. La pubblicazione del codice su GitHub richiede comunque i gate CI prima del rilascio delle immagini.
 
+## Aggiornamento del job del 29 settembre 2026
+
+Il commit `60ac14165ce8180119e851780d5a0f33cfb1a026` è presente su `main`. La [CI associata](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36480856992) ha completato con successo test, build e integrazione completa, ma ha ancora fallito il job `security_scan`; di conseguenza pubblicazione e deploy sono stati correttamente saltati.
+
+Le verifiche locali hanno confermato 65 test Python, 28 test Node-RED, runtime Node-RED reale, training e preflight. Il comando di runtime richiede esplicitamente `NODE_RED_RUNTIME`; con il runtime installato passa. `kubectl` è installato ma non ha `current-context` e tenta `localhost:8080`; Docker Desktop non espone il daemon. Non è stato possibile eseguire un dry-run server, un rollout o un controllo post-deploy.
+
 ## Correzioni implementate
 
 - Il consumer IA conserva solo i campi validati del contratto. Un'estensione JSON con un numero fuori intervallo non arresta più il worker; i campi aggiuntivi non gonfiano gli allarmi oltre 16 KiB. `event_id` usa il payload normalizzato.
@@ -43,11 +49,11 @@ Non sono state aggiunte esclusioni CVE, abbassate severità o disabilitati gate.
 
 ## Verifiche bloccate e prossimi passi
 
-1. Docker Desktop locale non ha completato l'avvio (`context deadline exceeded`); il motore Linux non è disponibile. Le quattro build e il test Docker dell'intero stack non sono stati eseguiti su questa proposta.
-2. Durante la prima sessione la creazione del branch remoto è stata rifiutata dall'autorizzazione e le verifiche sono rimaste locali. Il proprietario ha successivamente richiesto il push diretto su `main`. Controllare l'esito della CI del nuovo commit: la CI fallita della base non rappresenta una verifica di queste modifiche.
-3. Dopo aver reso disponibile Docker Linux o un runner autorizzato, costruire le quattro immagini e rieseguire l'integrazione, incluso il recupero DB. Il cambio di porta è una causa plausibile del vecchio timeout, non una causa dimostrata finché il collaudo completo non passa.
-4. Risolvere le segnalazioni residue nei binari upstream e nell'immagine IA, poi ripetere tutte le scansioni senza esclusioni generiche.
-5. Prima di una release, verificare migrazione su copie dei PVC, broker reale, NetworkPolicy e backup/ripristino secondo `K3S-COLLAUDO.md`.
+1. Rendere disponibile Docker Linux o usare un runner autorizzato per riprodurre localmente le quattro build; la CI ha già eseguito build e integrazione con esito positivo.
+2. Risolvere le segnalazioni residue nei binari upstream e nell'immagine IA, poi ripetere tutte le scansioni senza esclusioni generiche. La base `python:3.11-slim-bookworm` aggiornata continua a mostrare 55 HIGH e 5 CRITICAL OS senza fix, oltre a due HIGH Python correggibili; il passaggio Alpine non è compatibile con le wheel musllinux di scikit-learn 1.6.1.
+3. Per InfluxDB 2.9.1 Alpine la base OS non mostra HIGH/CRITICAL, ma i binari `dasel`, `influx` e `influxd` restano colpiti da vulnerabilità Go upstream. Non sostituire InfluxDB 2 con InfluxDB 3 senza una migrazione progettata: il sistema usa API e Flux di InfluxDB 2.
+4. Fornire un kubeconfig verificato per `https://192.168.1.12:6443`, accesso al broker TLS e Secret necessari; eseguire preflight, dry-run server e rollout solo dopo una CI verde.
+5. Dopo il deploy, verificare readiness, dashboard, NetworkPolicy, backup/ripristino e incoerenze del codice; quindi aggiornare nuovamente README e questo rapporto con SHA, namespace e risultati effettivi.
 
 Il deploy K3s resta disabilitato. Nessuna connessione al broker o alla VM di laboratorio è stata eseguita.
 
