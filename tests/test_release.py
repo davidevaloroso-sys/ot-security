@@ -46,3 +46,29 @@ def test_tokens_have_one_action_on_one_bucket(monkeypatch):
     assert [item['permissions'] for item in created] == [
         [{'action': action, 'resource': {'type':'buckets','id':'bucket-id','orgID':'org-id'}}]
         for action in ('write','read')]
+
+
+def node(architecture='amd64', operating_system='linux', ready=True, cordoned=False):
+    return {'spec': {'unschedulable': cordoned}, 'status': {
+        'nodeInfo': {'architecture': architecture, 'operatingSystem': operating_system},
+        'conditions': [{'type': 'Ready', 'status': 'True' if ready else 'False'}],
+    }}
+
+
+@pytest.mark.parametrize('nodes', [
+    [], [node(cordoned=True)], [node(ready=False)], [node(architecture='arm64')],
+    [node(), node(architecture='arm64')], [node(operating_system='windows')],
+    [{'spec': {}, 'status': {}}],
+])
+def test_release_rejects_unschedulable_or_incompatible_nodes(monkeypatch, nodes):
+    preflight = module('preflight')
+    monkeypatch.setattr(preflight, 'kubectl_json', lambda *args: {'items': nodes})
+    with pytest.raises(ValueError):
+        preflight.check_nodes()
+
+
+def test_release_accepts_ready_linux_amd64_and_ignores_cordoned_nodes(monkeypatch):
+    preflight = module('preflight')
+    nodes = [node(), node(architecture='arm64', cordoned=True)]
+    monkeypatch.setattr(preflight, 'kubectl_json', lambda *args: {'items': nodes})
+    preflight.check_nodes()

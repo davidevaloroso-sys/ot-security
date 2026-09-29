@@ -1,4 +1,4 @@
-"""Render immutable application image tags; never mutate the source manifests."""
+"""Render commit-versioned application image tags without mutating source manifests."""
 import argparse
 import re
 import hashlib
@@ -19,7 +19,8 @@ def render(revision, output):
                 container = doc['spec']['template']['spec']['containers'][0]
                 container['image'] = container['image'].replace('RELEASE_SHA', revision)
                 if doc['metadata']['name'] == 'grafana':
-                    content = ''.join(p.read_text(encoding='utf-8') for p in sorted((ROOT/'platform/grafana').glob('*')))
+                    content = ''.join((ROOT/'platform/grafana'/name).read_text(encoding='utf-8')
+                                      for name in ('datasource.yaml', 'provider.yaml', 'ot-security.json'))
                     doc['spec']['template']['metadata'].setdefault('annotations', {})['checksum/provisioning'] = hashlib.sha256(content.encode()).hexdigest()
         (output / source.name).write_text(yaml.safe_dump_all(docs, sort_keys=False), encoding='utf-8')
     maps = [

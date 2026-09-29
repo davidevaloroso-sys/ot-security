@@ -21,6 +21,7 @@ from urllib.request import Request, urlopen
 import paho.mqtt.client as mqtt
 import yaml
 from provision_influx_tokens import scoped_tokens
+from initialize_influx import initialize
 
 ROOT = Path(__file__).resolve().parents[1]
 BROKER_IMAGE = 'eclipse-mosquitto:2.0.22@sha256:199ea8ef2e35ec2b1b37e59cfd1dbae538ed4dfa4a2251a121a52215a6248a21'
@@ -65,7 +66,19 @@ class Stack:
         self.directory = directory
         self.prefix = 'ot-test-' + secrets.token_hex(4)
         self.containers = []
+        self.volumes = []
         command('docker', 'network', 'create', self.prefix)
+
+    def volume(self, name, uid, helper_image):
+        name = self.prefix + '-' + name
+        command('docker', 'volume', 'create', name)
+        self.volumes.append(name)
+        # Docker lacks Kubernetes fsGroup. Set ownership on this new test-only
+        # volume before starting the same non-root UID used by the deployment.
+        command('docker', 'run', '--rm', '--network', 'none', '--user', '0',
+                '--cap-drop', 'ALL', '--cap-add', 'CHOWN', '-v', name + ':/volume',
+                '--entrypoint', 'chown', helper_image, str(uid) + ':' + str(uid), '/volume')
+        return name
 
     def start(self, name, image, env=None, ports=(), mounts=(), extra=()):
         full = self.prefix + '-' + name
@@ -90,6 +103,8 @@ class Stack:
     def close(self):
         for container in reversed(self.containers):
             subprocess.run(['docker', 'rm', '-fv', container], capture_output=True, timeout=60, check=False)
+        for volume in self.volumes:
+            subprocess.run(['docker', 'volume', 'rm', volume], capture_output=True, timeout=60, check=False)
         subprocess.run(['docker', 'network', 'rm', self.prefix], capture_output=True, timeout=60, check=False)
 
 
@@ -143,11 +158,13 @@ def run(revision):
             shutil.copyfile(ROOT/'config/mosquitto.acl.example', config/'acl')
             (config/'mosquitto.conf').write_text('listener 8883\nallow_anonymous false\npassword_file /mosquitto/config/passwords\nacl_file /mosquitto/config/acl\ncertfile /mosquitto/config/server.crt\nkeyfile /mosquitto/config/server.key\ntls_version tlsv1.2\npersistence true\npersistence_location /mosquitto/data/\n')
             stack.start('broker',BROKER_IMAGE,ports=(8883,),mounts=((config,'/mosquitto/config'),))
-            influx_env={'DOCKER_INFLUXDB_INIT_MODE':'setup','DOCKER_INFLUXDB_INIT_USERNAME':'testadmin','DOCKER_INFLUXDB_INIT_PASSWORD':password,'DOCKER_INFLUXDB_INIT_ADMIN_TOKEN':admin_token,'DOCKER_INFLUXDB_INIT_ORG':'lab','DOCKER_INFLUXDB_INIT_BUCKET':'ot'}
-            stack.start('influxdb',platform_image('influxdb'),env=influx_env,ports=(8086,),extra=('--user','1000:1000','--read-only','--tmpfs','/tmp:uid=1000,gid=1000','--cap-drop','ALL','--security-opt','no-new-privileges'))
+            influx_env={'INFLUXD_BOLT_PATH':'/var/lib/influxdb2/influxd.bolt','INFLUXD_ENGINE_PATH':'/var/lib/influxdb2/engine','INFLUXD_SQLITE_PATH':'/var/lib/influxdb2/influxd.sqlite'}
+            volume = stack.volume('influx-data', 1000, image + revision)
+            stack.start('influxdb',platform_image('influxdb'),env=influx_env,ports=(8086,),extra=('--user','1000:1000','--read-only','--tmpfs','/tmp:uid=1000,gid=1000','-v',volume + ':/var/lib/influxdb2','--cap-drop','ALL','--security-opt','no-new-privileges'))
             influx='http://'+stack.endpoint('influxdb',8086)
             until(lambda: request(influx+'/health')[0]==200,'InfluxDB startup')
-            until(lambda: request(influx+'/api/v2/buckets',admin_token)[0]==200,'InfluxDB setup')
+            assert initialize(influx,'testadmin',password,admin_token,'lab','ot')
+            assert not initialize(influx,'testadmin',password,admin_token,'lab','ot'), 'Existing database was reinitialized'
             tokens=scoped_tokens(influx,admin_token,'lab','ot')
             common={'MQTT_BROKER':'broker','MQTT_PORT':'8883','MQTT_TLS':'true','MQTT_CA_FILE':'/etc/mqtt/ca.crt','MQTT_PASSWORD':password}
             ca_mount=((certs/'ca.crt','/etc/mqtt/ca.crt'),)
@@ -187,13 +204,15 @@ def run(revision):
             assert request(influx+'/api/v2/authorizations',tokens['nodered'],{'orgID':org_id,'permissions':[{'action':'read','resource':{'type':'buckets','orgID':org_id}}]})[0] in (401,403),'Write token must not create authorizations'
             stack.start('simulator',image+'raspi-simulator-'+revision,env={**common,'MQTT_USERNAME':'raspi-simulator','PUBLISH_INTERVAL':'1'},mounts=ca_mount)
             mounts=((ROOT/'platform/grafana/datasource.yaml','/etc/grafana/provisioning/datasources/ot.yaml'),(ROOT/'platform/grafana/provider.yaml','/etc/grafana/provisioning/dashboards/ot.yaml'),(ROOT/'platform/grafana/ot-security.json','/etc/grafana/ot-dashboards/ot-security.json'))
-            stack.start('grafana',platform_image('grafana'),env={'GF_SECURITY_ADMIN_USER':'testadmin','GF_SECURITY_ADMIN_PASSWORD':password,'GF_AUTH_ANONYMOUS_ENABLED':'false','INFLUXDB_ORG':'lab','INFLUXDB_BUCKET':'ot','INFLUXDB_READ_TOKEN':tokens['grafana']},ports=(3000,),mounts=mounts)
+            stack.start('grafana',image+'grafana-'+revision,env={'GF_SECURITY_ADMIN_USER':'testadmin','GF_SECURITY_ADMIN_PASSWORD':password,'GF_AUTH_ANONYMOUS_ENABLED':'false','INFLUXDB_ORG':'lab','INFLUXDB_BUCKET':'ot','INFLUXDB_READ_TOKEN':tokens['grafana']},ports=(3000,),mounts=mounts,extra=('--user','472:472','--read-only','--tmpfs','/tmp:uid=472,gid=472','--tmpfs','/var/lib/grafana:uid=472,gid=472','--cap-drop','ALL','--security-opt','no-new-privileges'))
             grafana='http://'+stack.endpoint('grafana',3000);auth='testadmin:'+password
             until(lambda: request(grafana+'/api/health')[0]==200,'Grafana startup')
             until(lambda: request(grafana+'/api/dashboards/uid/ot-security',auth=auth)[0]==200,'Dashboard provisioning')
             status,raw=request(grafana+'/api/dashboards/uid/ot-security',auth=auth)
             assert status==200,'Provisioned dashboard missing'
             dashboard=json.loads(raw)['dashboard']; assert len(dashboard['panels'])==6
+            until(lambda: request(grafana+'/api/datasources/uid/ot-influxdb/health',auth=auth)[0]==200,
+                  'Grafana datasource startup')
             status,raw=request(grafana+'/api/datasources/uid/ot-influxdb/health',auth=auth)
             assert status==200 and json.loads(raw)['status']=='OK','Grafana datasource health failed'
             # Execute every actual dashboard query through Grafana's datasource proxy.
@@ -218,7 +237,7 @@ def run(revision):
             until(lambda: request(node_url+'/ot-health')[0]==200,'Database recovery')
             recovery='from(bucket:"ot") |> range(start:-1h) |> filter(fn:(r)=>r.device=="recovery")'
             until(lambda: reading_persisted(stack,tokens['grafana'],recovery,'recovery'),'Recovery reading persisted')
-            print('PASS: TLS MQTT → Python inference + Node-RED → InfluxDB → all Grafana panels; token isolation, login and outage recovery')
+            print('PASS: TLS MQTT -> Python inference + Node-RED -> InfluxDB -> all Grafana panels; token isolation, login and outage recovery')
         finally:
             if publisher:
                 publisher.disconnect();publisher.loop_stop()
@@ -227,7 +246,7 @@ def run(revision):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('revision',help='Full SHA of the four locally built/scanned images')
+    parser.add_argument('revision',help='Full SHA of the five locally built/scanned images')
     args=parser.parse_args()
     if len(args.revision)!=40 or any(c not in '0123456789abcdef' for c in args.revision):
         parser.error('Expected full commit SHA')

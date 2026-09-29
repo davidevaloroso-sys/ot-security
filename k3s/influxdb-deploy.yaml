@@ -27,39 +27,20 @@ spec:
     spec:
       containers:
       - name: influxdb
-        image: influxdb:2.9.1-alpine@sha256:38e81dd3af50d085704d970815210dae3d094c5a8a70d7a8f336716889022ea2
+        image: dhi.io/influxdb:2.9.1@sha256:3d49ee8ee9a085aee4982aea74ae041f7928cbcd7ff41f0ca5a8f96b4ec1c0bb
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
           containerPort: 8086
         env:
-        - name: DOCKER_INFLUXDB_INIT_MODE
-          value: setup
-        - name: DOCKER_INFLUXDB_INIT_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: observability-secrets
-              key: INFLUXDB_ADMIN_USER
-        - name: DOCKER_INFLUXDB_INIT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: observability-secrets
-              key: INFLUXDB_ADMIN_PASSWORD
-        - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: observability-secrets
-              key: INFLUXDB_ADMIN_TOKEN
-        - name: DOCKER_INFLUXDB_INIT_ORG
-          valueFrom:
-            secretKeyRef:
-              name: observability-secrets
-              key: INFLUXDB_ORG
-        - name: DOCKER_INFLUXDB_INIT_BUCKET
-          valueFrom:
-            secretKeyRef:
-              name: observability-secrets
-              key: INFLUXDB_BUCKET
+        # Retain the existing PVC paths and UID when replacing the runtime.
+        # Initial credentials are supplied once through the setup API by bootstrap.
+        - name: INFLUXD_BOLT_PATH
+          value: /var/lib/influxdb2/influxd.bolt
+        - name: INFLUXD_ENGINE_PATH
+          value: /var/lib/influxdb2/engine
+        - name: INFLUXD_SQLITE_PATH
+          value: /var/lib/influxdb2/influxd.sqlite
         volumeMounts:
         - name: influxdb-storage
           mountPath: /var/lib/influxdb2

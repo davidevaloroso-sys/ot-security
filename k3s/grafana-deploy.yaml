@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
       - name: grafana
-        image: grafana/grafana:13.2.2@sha256:ac461fb352abc50da10a51c7d02462e9c05488f11f53f14b3ad79a8145f638a0
+        image: ghcr.io/davidevaloroso-sys/ot-security:grafana-RELEASE_SHA
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -71,6 +71,8 @@ spec:
         volumeMounts:
         - name: grafana-storage
           mountPath: /var/lib/grafana
+        - name: tmp
+          mountPath: /tmp
         - name: grafana-datasource
           mountPath: /etc/grafana/provisioning/datasources
           readOnly: true
@@ -100,6 +102,7 @@ spec:
         securityContext:
           runAsNonRoot: true
           runAsUser: 472
+          readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
           capabilities:
             drop:
@@ -107,6 +110,9 @@ spec:
           seccompProfile:
             type: RuntimeDefault
       volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
       - name: grafana-storage
         persistentVolumeClaim:
           claimName: grafana-pvc

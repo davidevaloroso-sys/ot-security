@@ -52,6 +52,22 @@ def check_cluster():
         raise ValueError('Expected verified K3s API on 192.168.1.12')
 
 
+def check_nodes():
+    # CI currently builds linux/amd64 images, and the workloads have no node selector.
+    nodes = [node for node in kubectl_json('get', 'nodes')['items']
+             if not node.get('spec', {}).get('unschedulable', False)]
+    if not nodes:
+        raise ValueError('No schedulable K3s nodes')
+    for node in nodes:
+        info = node.get('status', {}).get('nodeInfo', {})
+        if info.get('operatingSystem') != 'linux' or info.get('architecture') != 'amd64':
+            raise ValueError('Release requires linux/amd64 on every schedulable node')
+    if not any(any(condition.get('type') == 'Ready' and condition.get('status') == 'True'
+                   for condition in node.get('status', {}).get('conditions', []))
+               for node in nodes):
+        raise ValueError('No schedulable K3s node is Ready')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path, nargs='?')
@@ -67,6 +83,7 @@ def main():
     secrets, maps = inspect(args.directory)
     if not args.offline:
         check_cluster()
+        check_nodes()
         for kind, expected in [('secret', secrets), ('configmap', maps)]:
             for name, keys in expected.items():
                 resource = kubectl_json('-n', 'ot-namespace', 'get', kind, name)

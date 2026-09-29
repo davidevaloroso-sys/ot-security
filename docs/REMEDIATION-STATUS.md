@@ -1,60 +1,53 @@
-# Correzioni OT-Security — 28 settembre 2026
+# Attività e risultati OT-Security — 29 settembre 2026
 
-Base analizzata: `0cb9d376d490579d7110350305967920433a7251`.
-Queste modifiche non costituiscono una release collaudata e non sono state distribuite sulla VM. La pubblicazione del codice su GitHub richiede comunque i gate CI prima del rilascio delle immagini.
+## Stato della release
 
-## Aggiornamento del job del 29 settembre 2026
+Il proprietario ha autorizzato correzioni, push diretto a `main`, test e deploy K3s; ha confermato l'uso dei Secret GitHub WireGuard/Kubeconfig già configurati. Docker Desktop Linux è ora disponibile. Il PC non ha un contesto Kubernetes locale: il percorso previsto verso `192.168.1.12` è il job GitHub nell'environment `lab`.
 
-Il commit `60ac14165ce8180119e851780d5a0f33cfb1a026` è presente su `main`. La [CI associata](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36480856992) ha completato con successo test, build e integrazione completa, ma ha ancora fallito il job `security_scan`; di conseguenza pubblicazione e deploy sono stati correttamente saltati.
+La candidata locale ha completato i controlli riportati sotto. CI remota, pubblicazione e deploy di queste modifiche devono ancora essere verificati. Nessun risultato locale viene presentato come rollout sul laboratorio.
 
-Le verifiche locali hanno confermato 65 test Python, 28 test Node-RED, runtime Node-RED reale, training e preflight. Il comando di runtime richiede esplicitamente `NODE_RED_RUNTIME`; con il runtime installato passa. `kubectl` è installato ma non ha `current-context` e tenta `localhost:8080`; Docker Desktop non espone il daemon. Non è stato possibile eseguire un dry-run server, un rollout o un controllo post-deploy.
+## Cronologia e correzioni
 
-## Correzioni implementate
+- Base iniziale analizzata: `0cb9d376d490579d7110350305967920433a7251`.
+- `60ac14165ce8180119e851780d5a0f33cfb1a026`, già pubblicato su main: normalizzazione del contratto IA, rimozione delle estensioni arbitrarie, limite Unicode condiviso degli alert, distinzione fra errori permanenti e transitori di InfluxDB, controllo PUBACK, query di persistenza effettive e risoluzione delle porte dopo riavvio. Gate di regressione training 0.95 per precisione/recall anomalia, con override espliciti registrati.
+- `82184140b9826a46d177068d5bcb1282d05beea1`: aggiornamento documentazione. La [CI di questo SHA](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36506146251) aveva superato test, quattro build e integrazione, ma falliva lo scanner; publish/deploy erano saltati.
+- Il job attuale ha sostituito la base Debian IA con Alpine in due stadi. scikit-learn 1.6.1 viene compilato con due processi; versioni runtime invariate, compilatori e installer esclusi dall'immagine finale. Nessuna modifica al formato del modello.
+- InfluxDB passa a DHI 2.9.1, conservando UID 1000 e percorsi del PVC. Il setup viene eseguito tramite API da `initialize_influx.py`, solo se il database è vuoto; un DB esistente viene verificato senza reset o rotazione implicita. Bootstrap e integrazione sono stati aggiornati.
+- Grafana passa a una build del progetto basata su DHI 13.2.2 con il solo plugin InfluxDB 13.1.6, archivio ufficiale fissato tramite SHA256. Plugin fuori dal PVC, root filesystem in sola lettura, installazioni automatiche disabilitate. La pipeline ora costruisce, prova, scansiona e pubblica cinque immagini.
+- La scansione della base Grafana è completata con l'SPDX upstream, firmato e verificato contro la chiave Docker. Hash, digest immagine/piattaforma e attestazione sono registrati; il gate rifiuta una base aggiornata senza inventario corrispondente. Nessuna esclusione CVE/VEX aggiunta. Dettagli in [GRAFANA-SBOM.md](GRAFANA-SBOM.md).
+- Deploy abilitato su push main, subordinato a tutti i gate, con timeout, controllo configurazione VPN, verifica endpoint TLS, nodi Linux/amd64 Ready e controllo SHA prima dell'apply. Rollout 360s, coerente con startup probe 300s.
+- `postdeploy_check.py` aggiunge verifica di salute Node-RED/InfluxDB/Grafana, datasource, corrispondenza delle query provisionate e dati reali temperatura/umidità degli ultimi 5min. Port-forward temporanei localhost e credenziali in memoria; niente stampa di valori segreti.
+- Corrette incoerenze documentali: Docker disponibile, deploy autorizzato, cinque tag di release, inizializzazione Influx via API, tag versionati per commit invece di garanzia impropria di immutabilità. Le sole modifiche README/docs non creano nuove release.
 
-- Il consumer IA conserva solo i campi validati del contratto. Un'estensione JSON con un numero fuori intervallo non arresta più il worker; i campi aggiuntivi non gonfiano gli allarmi oltre 16 KiB. `event_id` usa il payload normalizzato.
-- Python e Node-RED applicano lo stesso limite di 128 punti di codice Unicode agli alert.
-- Node-RED scarta e contabilizza singoli punti definitivamente rifiutati dal DB (413/422 o 400 con errore esplicito di parsing), senza bloccare tutti i messaggi successivi. Continua a ritentare errori generici 400, di autorizzazione, configurazione, rete e disponibilità. Non registra il corpo della risposta o il payload.
-- Il collaudo risolve la porta InfluxDB corrente dopo i riavvii, verifica veri record CSV e richiede il PUBACK delle pubblicazioni. Un errore di autorizzazione della query non viene più confuso con un timeout di persistenza.
-- Il training applica soglie di regressione del laboratorio pari a 0.95 per precisione e recall della classe anomala quando le variabili sono vuote o mancanti. Gli override espliciti sono registrati. Questi valori non attestano idoneità per impianti reali.
+## Controlli locali conclusi
 
-## Verifiche eseguite
-
-| Verifica locale | Esito |
+| Verifica | Esito |
 |---|---|
-| Python, ambiente isolato 3.12.14 | 65 test superati |
-| Node.js 24.19.0, componenti di acquisizione | 28 test superati |
-| Runtime Node-RED reale, broker e server HTTP di test | Flusso, login amministrativo e persistenza superati |
-| Training sul dataset incluso | 10.000 righe, split 8.000/2.000; precisione e recall anomalia 1.0, gate superati |
-| Caricamento modello e inferenza di avvio | Superati |
-| Bandit, soglia Medium+ / confidenza Medium+ | Superata; restano 9 segnalazioni Low |
-| npm audit delle dipendenze di produzione, nodo e runtime | Zero vulnerabilità riportate |
-| Rendering manifest e preflight offline | Superati |
+| Pytest, ambiente Python 3.12.14 | 94 test passati |
+| Cinque build Docker Linux | Passate; Python runtime 3.11.16 |
+| Caricamento modello IA, UID 10001, filesystem read-only, rete assente | Passato |
+| Portabilità modello su 10.000 righe | Differenza massima probabilità 0.0, classi identiche a soglia 0.70 |
+| Trivy 0.74.0, cinque candidate e Influx DHI | Zero HIGH/CRITICAL; scansione vulnerabilità e segreti |
+| SPDX base Grafana, 550 componenti più radice | Firma verificata; zero HIGH/CRITICAL con Trivy |
+| Integrazione Docker reale | TLS MQTT, IA, persistenza, token read/write limitati, login Node-RED, datasource, cinque query Grafana e outage/recovery DB superati |
+| actionlint 1.7.7, kubeconform 0.6.7, schema Kubernetes 1.31 | Workflow valido; 25 risorse valide, zero errori |
+| Rendering e preflight offline | Passati; non attestano lo stato dei Secret del cluster |
+| Bandit Medium+ / confidenza Medium+ | Passato su applicazioni e nuovi script operativi |
 
-La CI usa Python 3.11: questa matrice deve ancora essere rieseguita in CI. I test di regressione del consumer usano anche modelli controllati per isolare i casi limite; non sostituiscono il modello reale o l'integrazione completa.
+I test Node-RED (28), il runtime reale e il training erano già passati nella CI precedente; la nuova CI li riesegue. Il training usa Python 3.11, split stratificato 8000/2000, seed42, precisione/recall anomalia 1.0 sul dataset incluso. Queste metriche non qualificano un impianto industriale reale.
 
-## Immagini: miglioramenti proposti e problemi aperti
+## Problemi incontrati e risolti durante il job
 
-Scansioni remote eseguite con Trivy 0.74.0 e database aggiornato il 28/09/2026. I rapporti locali sono in `test-results/python-alpine.json` e `test-results/influx-alpine.json` (ignorati da Git). I conteggi sono occorrenze per pacchetto/binario, non necessariamente CVE distinte.
+1. Il primo accesso Docker era negato dal sandbox; l'accesso autorizzato al daemon dell'utente ha confermato Docker Desktop attivo.
+2. Influx DHI non include l'entrypoint di setup della vecchia immagine. Introdotto setup API idempotente e collaudato che il secondo passaggio non reinizializzi il DB.
+3. Docker non applica `fsGroup` come Kubernetes: il test crea un volume proprio e imposta UID 1000 prima dell'avvio; il volume persiste nel test di riavvio e viene rimosso solo dal cleanup dello stack temporaneo.
+4. Grafana DHI scaricava plugin all'avvio: sostituito il comportamento con plugin preinstallato, fisso e scansionato. Verificata l'esecuzione delle query reali, non solo `/api/health`.
+5. Il formato CycloneDX del fornitore perdeva lo scope `@types` di js-cookie, causando un falso positivo. Usato il distinto formato SPDX firmato, che conserva l'identità del package, senza alterare inventari o ignorare CVE.
+6. La verifica firma iniziale falliva per assenza dell'attestazione in Rekor: usata la modalità Docker documentata `--verify --skip-tlog`, mantenendo la verifica crittografica della firma e dei claims. La vecchia Docker Scout 1.20.2 ha inoltre un crash nel percorso VEX; nessun VEX è stato necessario o usato nel gate.
+7. Il collaudo era terminato funzionalmente ma la stampa Unicode falliva nella console Windows cp1252. Il messaggio finale ora usa ASCII e il test è stato rieseguito con exit 0.
 
-| Componente | Proposta / evidenza | Stato |
-|---|---|---|
-| Audit e simulatore | Base ufficiale `python:3.11-alpine`, digest `cd04730b8511def3fbf14204d66a0c1536f290b8e896ed5a94cd64cb15ac1356`; nessun HIGH/CRITICAL nei pacchetti OS della base scansionata | Dockerfile aggiornati; build e scansione delle immagini finali da eseguire |
-| Strumenti Python nella base Alpine | Due HIGH in `jaraco.context` e `wheel`; i Dockerfile rimuovono pip/setuptools/wheel dopo l'installazione | Verificare l'assenza effettiva nell'immagine finale, non assumere un esito verde dalla sola base |
-| InfluxDB | Variante ufficiale 2.9.1 Alpine, digest `38e81dd3af50d085704d970815210dae3d094c5a8a70d7a8f336716889022ea2`; zero HIGH/CRITICAL OS | Manifest aggiornato; compatibilità del container e dei PVC da collaudare |
-| Binari InfluxDB Alpine | `dasel`: 21 HIGH; `influx`: 16 HIGH; `influxd`: 33 HIGH | **70 segnalazioni HIGH ancora aperte**; richiedono aggiornamento/ricompilazione upstream dei binari e dipendenze Go |
-| Consumer IA | scikit-learn 1.6.1 non dispone di wheel musllinux per Python 3.11 x86_64, verificato con download solo binari | Base Debian conservata; le segnalazioni della CI precedente non sono risolte. Valutare build musl separata o altra base compatibile, con training e collaudo |
-| Grafana | L'ultima release ufficiale consultata è ancora 13.2.2, già in uso; la CI originale segnala dipendenze vulnerabili nei binari/plugin | Nessuna correzione verificata; attendere una release corretta o preparare un rebuild upstream riproducibile e collaudato |
+## Evidenze e limiti
 
-Non sono state aggiunte esclusioni CVE, abbassate severità o disabilitati gate. Il workflow continua a impedire la pubblicazione in presenza di scansioni o integrazione fallite. Non migrare a InfluxDB 3 come semplice aggiornamento: il percorso attuale dipende dalle API/Flux di InfluxDB 2.
+Report locali ignorati da Git in `test-results/`: `local-security.json`, `raspi-simulator-local-security.json`, `ia-alpine-security.json`, `nodered-local-security.json`, `grafana-local-security.json`, `influx-final-security.json`, `grafana-spdx-security.json`. L'inventario di sicurezza della base è invece versionato nel repository per essere scansionato dalla CI.
 
-## Verifiche bloccate e prossimi passi
-
-1. Rendere disponibile Docker Linux o usare un runner autorizzato per riprodurre localmente le quattro build; la CI ha già eseguito build e integrazione con esito positivo.
-2. Risolvere le segnalazioni residue nei binari upstream e nell'immagine IA, poi ripetere tutte le scansioni senza esclusioni generiche. La base `python:3.11-slim-bookworm` aggiornata continua a mostrare 55 HIGH e 5 CRITICAL OS senza fix, oltre a due HIGH Python correggibili; il passaggio Alpine non è compatibile con le wheel musllinux di scikit-learn 1.6.1.
-3. Per InfluxDB 2.9.1 Alpine la base OS non mostra HIGH/CRITICAL, ma i binari `dasel`, `influx` e `influxd` restano colpiti da vulnerabilità Go upstream. Non sostituire InfluxDB 2 con InfluxDB 3 senza una migrazione progettata: il sistema usa API e Flux di InfluxDB 2.
-4. Fornire un kubeconfig verificato per `https://192.168.1.12:6443`, accesso al broker TLS e Secret necessari; eseguire preflight, dry-run server e rollout solo dopo una CI verde.
-5. Dopo il deploy, verificare readiness, dashboard, NetworkPolicy, backup/ripristino e incoerenze del codice; quindi aggiornare nuovamente README e questo rapporto con SHA, namespace e risultati effettivi.
-
-Il deploy K3s resta disabilitato. Nessuna connessione al broker o alla VM di laboratorio è stata eseguita.
-
-Riferimenti: [CI della base](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36306512360), [log integrazione precedente](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36306512360/job/109107832832), [log scansioni precedenti](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36306512360/job/109107832707), [Grafana 13.2.2](https://github.com/grafana/grafana/releases/tag/v13.2.2).
+Restano da registrare lo SHA pubblicato, l'esito della nuova CI, il preflight online, l'eventuale rollout e lo smoke del laboratorio. Backup/ripristino dei dati reali, enforcement NetworkPolicy e prove di guasto sul cluster non sono stati eseguiti da questo collaudo locale; non vengono dichiarati superati. Non eliminare PVC o resettare credenziali per superare un errore di avvio.

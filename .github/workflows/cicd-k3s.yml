@@ -2,8 +2,10 @@ name: CI-CD K3s OT
 on:
   push:
     branches: [main]
+    paths-ignore: ['README.md', 'docs/**']
   pull_request:
     branches: [main]
+    paths-ignore: ['README.md', 'docs/**']
 permissions:
   contents: read
 concurrency:
@@ -86,6 +88,9 @@ jobs:
           - name: nodered
             dockerfile: platform/nodered/Dockerfile
             prefix: nodered-
+          - name: grafana
+            dockerfile: platform/grafana/Dockerfile
+            prefix: grafana-
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -100,7 +105,7 @@ jobs:
           PREFIX: ${{ matrix.prefix }}
         run: docker build -f "$DOCKERFILE" -t "$IMAGE_NAME:$PREFIX$GITHUB_SHA" .
       - name: Check application image contents
-        if: matrix.name != 'nodered'
+        if: matrix.name == 'consumer' || matrix.name == 'simulator' || matrix.name == 'inference'
         env:
           PREFIX: ${{ matrix.prefix }}
         run: >-
@@ -135,13 +140,15 @@ jobs:
           for prefix in '' raspi-simulator- ia-consumer- nodered-; do
             bash scripts/scan_image.sh "$IMAGE_NAME:$prefix$GITHUB_SHA" "scan-reports/${prefix}application.json" || result=1
           done
+          python scripts/verify_platform_sbom.py
+          bash scripts/scan_image.sh "$IMAGE_NAME:grafana-$GITHUB_SHA" scan-reports/grafana-application.json platform/grafana/security/base-sbom.spdx.json || result=1
           exit "$result"
       - name: Scan core platform images
         if: always()
         run: |
           mkdir -p scan-reports
           result=0
-          for app in influxdb grafana; do
+          for app in influxdb; do
             image="$(awk '$1 == "image:" {print $2; exit}' "k3s/$app-deploy.yaml")"
             bash scripts/scan_image.sh "$image" "scan-reports/$app.json" || result=1
           done
@@ -194,11 +201,12 @@ jobs:
           for prefix in '' raspi-simulator- ia-consumer- nodered-; do
             docker push "$IMAGE_NAME:$prefix$GITHUB_SHA"
           done
+          docker push "$IMAGE_NAME:grafana-$GITHUB_SHA"
   deploy_k3s:
     needs: publish
-    # Disabled until an operator explicitly enables the future lab collaudo.
-    if: false
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: lab
     concurrency:
       group: ot-lab-deployment
@@ -222,6 +230,12 @@ jobs:
           WG_ENDPOINT: ${{ secrets.WG_ENDPOINT }}
           KUBE_CONFIG: ${{ secrets.K3S_KUBECONFIG }}
         run: |
+          for required in WG_PRIVATE WG_PUBLIC WG_ENDPOINT KUBE_CONFIG; do
+            if [ -z "${!required}" ]; then
+              printf 'Required deployment configuration is missing: %s\n' "$required" >&2
+              exit 1
+            fi
+          done
           sudo apt-get update
           sudo apt-get install -y wireguard
           umask 077
@@ -230,16 +244,21 @@ jobs:
           sudo wg-quick up "$RUNNER_TEMP/wg0.conf"
           echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
       - name: Validate API and deploy versioned workloads
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           kubectl version --client
-          kubectl get --raw=/version
+          python scripts/preflight.py --cluster-only
+          kubectl --request-timeout=30s get --raw=/version
           python scripts/render_release.py "$GITHUB_SHA" --output rendered
           python scripts/preflight.py rendered
-          kubectl apply --dry-run=server -f rendered
-          kubectl apply -f rendered
+          kubectl --request-timeout=60s apply --dry-run=server -f rendered
+          test "$(gh api repos/$GITHUB_REPOSITORY/commits/main --jq .sha)" = "$GITHUB_SHA"
+          kubectl --request-timeout=60s apply -f rendered
           for workload in influxdb nodered grafana ot-mqtt-consumer raspi-simulator ia-consumer; do
-            kubectl rollout status deployment/$workload -n ot-namespace --timeout=180s
+            kubectl rollout status deployment/$workload -n ot-namespace --timeout=360s
           done
+          python scripts/postdeploy_check.py
       - name: Remove VPN and temporary credentials
         if: always()
         run: |

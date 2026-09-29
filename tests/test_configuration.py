@@ -24,7 +24,11 @@ def test_ci_pr_has_no_write_permissions_and_scan_precedes_publish():
     workflow=yaml.safe_load((ROOT/'.github/workflows/cicd-k3s.yml').read_text())
     assert workflow['permissions']=={'contents':'read'}
     assert workflow['jobs']['publish']['needs']==['build', 'security_scan', 'integration']
-    assert workflow['jobs']['deploy_k3s']['if'] is False
+    deploy=workflow['jobs']['deploy_k3s']
+    assert deploy['needs']=='publish'
+    assert deploy['if']=="github.event_name == 'push' && github.ref == 'refs/heads/main'"
+    assert deploy['environment']=='lab'
+    assert deploy['concurrency']=={'group':'ot-lab-deployment','cancel-in-progress':False}
     assert "github.event_name == 'push'" in workflow['jobs']['publish']['if']
     assert 'permissions' not in workflow['jobs']['build']
     for job in workflow['jobs'].values():
@@ -49,7 +53,7 @@ def test_release_renderer_changes_only_output(tmp_path):
     module.render('a'*40,tmp_path)
     for p in tmp_path.glob('*.yaml'):
         assert 'RELEASE_SHA' not in p.read_text()
-    for name in ('ia-consumer', 'raspi-simulator', 'ot-consumer', 'nodered'):
+    for name in ('ia-consumer', 'raspi-simulator', 'ot-consumer', 'nodered', 'grafana'):
         assert 'a'*40 in (tmp_path/f'{name}-deploy.yaml').read_text()
     assert (tmp_path/'grafana-dashboard.yaml').exists()
     assert 'RELEASE_SHA' in (ROOT/'k3s/ia-consumer-deploy.yaml').read_text()

@@ -8,6 +8,10 @@ TARGETS=(
   "ot_common.py"
   "IA-integration/ia-consumer"
   "IA-integration/raspi-simulator"
+  "scripts/preflight.py"
+  "scripts/initialize_influx.py"
+  "scripts/provision_influx_tokens.py"
+  "scripts/postdeploy_check.py"
 )
 
 mkdir -p "${REPORT_DIR}"

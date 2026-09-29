@@ -3,3 +3,5 @@
 *.py text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+# Preserve the exact checksum of the verified vendor SPDX predicate.
+platform/grafana/security/base-sbom.spdx.json -text

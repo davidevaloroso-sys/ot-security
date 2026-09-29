@@ -1,0 +1,10 @@
+{
+  "image": "dhi.io/grafana:13.2.2@sha256:686af1d55ed4d98447691028fd46bdd40833fd053df0144980fabca05a8f3382",
+  "platform": "linux/amd64",
+  "platform_digest": "sha256:7ffc0551ec95e0890d23168cf601b399cc35f983f053529e3733688f43c4734a",
+  "attestation_digest": "sha256:6e5efa60080131113c227a41573af870313b12a99218b1801b4ce1b3b01329e6",
+  "predicate_type": "https://spdx.dev/Document",
+  "sbom_sha256": "9d0e48ba4f5b215226a11066b1fadc3934253edf716e284eac53283292ba96e3",
+  "signature_key": "https://registry.scout.docker.com/keyring/dhi/latest.pub",
+  "verified_on": "2026-09-29"
+}

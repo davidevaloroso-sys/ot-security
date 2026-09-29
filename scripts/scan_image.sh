@@ -11,4 +11,9 @@ report="${2:-scan-report.json}"
 scan_status=0
 "$scan_dir/trivy" image --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --timeout 15m --format json --output "$report" "$1" || scan_status=$?
 if [ -f "$report" ]; then "$scan_dir/trivy" convert --format table "$report"; fi
+if [ -n "${3:-}" ]; then
+  # Also scan the signed inventory of stripped vendor binaries.
+  "$scan_dir/trivy" sbom --severity HIGH,CRITICAL --exit-code 1 --format json --output "${report%.json}-sbom.json" "$3" || scan_status=1
+  if [ -f "${report%.json}-sbom.json" ]; then "$scan_dir/trivy" convert --format table "${report%.json}-sbom.json"; fi
+fi
 exit "$scan_status"

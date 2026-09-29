@@ -2,11 +2,11 @@
 
 ## Stato operativo — 29 settembre 2026
 
-Il commit `60ac14165ce8180119e851780d5a0f33cfb1a026` è stato verificato con 65 test Python, 28 test Node-RED, runtime Node-RED reale, training del modello, preflight manifest e integrazione Docker in CI. L'integrazione completa è passata, compreso il recupero dopo il riavvio di InfluxDB.
+La candidata del job è stata verificata con 94 test Python, cinque build Docker, scansioni HIGH/CRITICAL e integrazione completa locale: MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.
 
-La pubblicazione delle immagini resta bloccata dal gate Trivy: la CI segnala vulnerabilità HIGH/CRITICAL senza fix nelle immagini Python e numerose vulnerabilità HIGH nei binari upstream di InfluxDB e nei componenti Grafana. Non sono state aggiunte esclusioni per forzare il rilascio. Il job `deploy_k3s` resta disabilitato; in questa sessione non è stato eseguito alcun deploy perché l'ambiente locale non dispone di kubeconfig/cluster attivo e Docker Desktop non è disponibile. Le attività, i risultati e i blocchi sono registrati in `docs/REMEDIATION-STATUS.md`.
+Le immagini candidate e l'inventario SPDX firmato della base Grafana non riportano HIGH/CRITICAL nelle scansioni locali del 29 settembre. Nessuna esclusione CVE è stata aggiunta. Il deploy è autorizzato e abilitato sui push a `main`, subordinato a CI, pubblicazione, preflight e dry-run server. La verifica sul cluster tramite i Secret GitHub deve ancora concludersi: lo stato effettivo è registrato in [docs/REMEDIATION-STATUS.md](docs/REMEDIATION-STATUS.md).
 
-Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. Il server K3s e il broker esterno restano **192.168.1.12**. Il deploy del cluster è disabilitato in CI fino al collaudo concordato con il proprietario della VM.
+Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. Il server K3s e il broker esterno restano **192.168.1.12**.
 
 ```text
 Simulatore ── MQTT TLS/QoS1 ── broker esterno :8883
@@ -89,7 +89,7 @@ Chiudere 1883 dopo aver migrato tutti i client. Il plaintext è ammesso solo nei
 
 Prima di un aggiornamento salvare PVC, database e credenziali. Le immagini passano a Node-RED 5.0.7, Grafana 13.2.2 e InfluxDB 2.9.1: provare la migrazione su copie dei dati. InfluxDB 2.9 memorizza hash dei token; conservarne i valori nel gestore segreti prima dell'upgrade. Un semplice rollback dell'immagine non equivale a ripristinare il database. Il PVC `influxdb-config-pvc` conserva anche la configurazione CLI: includerlo nei backup e limitarne l'accesso.
 
-Servono storage class, immagini GHCR accessibili, CA, broker TLS e kubeconfig verificato per `https://192.168.1.12:6443`. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout.
+Servono nodi Linux/amd64 Ready, storage class, immagini GHCR e `dhi.io` accessibili, CA, broker TLS e kubeconfig verificato per `https://192.168.1.12:6443`. Se GHCR è privato configurare credenziali registry sui nodi o imagePullSecret prima del rollout. Il preflight richiede anche il permesso RBAC di leggere i nodi.
 
 ```bash
 export SECRET_DIR='/percorso/protetto/segreti-lab'
@@ -97,7 +97,7 @@ export MQTT_CA_FILE='/percorso/ca.crt'
 bash scripts/bootstrap.sh
 ```
 
-Lo script preserva i Secret già esistenti e crea solo quelli mancanti. Il setup InfluxDB inizializza esclusivamente un volume vuoto: cambiare le env non ruota credenziali di un DB già inizializzato. Non riutilizzare PVC con permessi incompatibili senza una migrazione esplicita: i processi applicativi girano senza root (UID 10001 Python, 1000 Node-RED/InfluxDB, 472 Grafana).
+Lo script preserva i Secret già esistenti e crea solo quelli mancanti. InfluxDB usa l'immagine DHI 2.9.1, con percorsi dati e UID conservati. `initialize_influx.py` esegue il setup via API soltanto se il DB è vuoto; su un DB esistente verifica credenziali e bucket senza reinizializzare o ruotare token. Le vecchie variabili `DOCKER_INFLUXDB_INIT_*` non sono più necessarie al runtime. Non riutilizzare PVC con permessi incompatibili senza una migrazione esplicita: i processi applicativi girano senza root (UID 10001 Python, 1000 Node-RED/InfluxDB, 472 Grafana).
 
 Aprire un port-forward locale a InfluxDB. In un secondo terminale impostare `INFLUXDB_URL=http://127.0.0.1:8086`, `INFLUXDB_ADMIN_TOKEN`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET` tramite il proprio gestore di segreti:
 
@@ -117,11 +117,12 @@ python scripts/preflight.py rendered
 kubectl apply --dry-run=server -f rendered
 kubectl apply -f rendered
 for app in influxdb nodered grafana ot-mqtt-consumer raspi-simulator ia-consumer; do
-  kubectl -n ot-namespace rollout status deployment/$app --timeout=300s
+  kubectl -n ot-namespace rollout status deployment/$app --timeout=360s
 done
+python scripts/postdeploy_check.py
 ```
 
-Usare lo SHA completo di una release pubblicata con CI verde. Il renderer genera anche i tre ConfigMap Grafana e la checksum di provisioning; non modifica i sorgenti. Non applicare direttamente `k3s/`, che contiene tag `RELEASE_SHA`. I quattro tag di rilascio sono `<sha>`, `raspi-simulator-<sha>`, `ia-consumer-<sha>`, `nodered-<sha>`. Dopo rotazione dei Secret riavviare consapevolmente i pod interessati.
+Usare lo SHA completo di una release pubblicata con CI verde. Il renderer genera anche i tre ConfigMap Grafana e la checksum di provisioning; non modifica i sorgenti. Non applicare direttamente `k3s/`, che contiene tag `RELEASE_SHA`. I cinque tag di rilascio sono `<sha>`, `raspi-simulator-<sha>`, `ia-consumer-<sha>`, `nodered-<sha>` e `grafana-<sha>`. Dopo rotazione dei Secret riavviare consapevolmente i pod interessati.
 
 Accesso alle UI tramite port-forward su localhost; login con i rispettivi account:
 
@@ -152,7 +153,7 @@ bash scripts/validate_config.sh
 (cd IA-integration/ia-consumer && python train_model.py)
 ```
 
-Per provare l'intero stack senza il cluster, costruire le quattro immagini con lo stesso SHA e lanciare:
+Per provare l'intero stack senza il cluster, costruire le cinque immagini con lo stesso SHA e lanciare:
 
 ```bash
 export RELEASE_SHA="$(git rev-parse HEAD)"
@@ -161,6 +162,7 @@ docker build -t "$IMAGE_NAME:$RELEASE_SHA" .
 docker build -f IA-integration/raspi-simulator/Dockerfile -t "$IMAGE_NAME:raspi-simulator-$RELEASE_SHA" .
 docker build -f IA-integration/ia-consumer/Dockerfile -t "$IMAGE_NAME:ia-consumer-$RELEASE_SHA" .
 docker build -f platform/nodered/Dockerfile -t "$IMAGE_NAME:nodered-$RELEASE_SHA" .
+docker build -f platform/grafana/Dockerfile -t "$IMAGE_NAME:grafana-$RELEASE_SHA" .
 python scripts/integration_test.py "$RELEASE_SHA"
 ```
 
@@ -172,9 +174,11 @@ Lo smoke aggiuntivo `platform/nodered/test/runtime.cjs`, con `NODE_RED_RUNTIME` 
 
 ## CI e qualità del modello
 
-Le PR e i push a main eseguono test, Bandit, validazione schema, training, quattro build e Trivy HIGH/CRITICAL; nessuna pubblicazione precede scansioni e integrazione. Solo main pubblica le immagini già provate. Actions e basi container sono fissate; Dependabot aggiorna Python, Docker, npm e Actions. La scansione può bloccare anche dipendenze upstream senza fix: non ignorare automaticamente gli avvisi.
+Le PR e i push a main eseguono test, Bandit, validazione schema, training, cinque build e Trivy HIGH/CRITICAL; nessuna pubblicazione precede scansioni e integrazione. Solo main pubblica le immagini già provate. Modifiche limitate a README e `docs/` non avviano una nuova release. Actions e basi container sono fissate; Dependabot aggiorna Python, Docker, npm e Actions. La scansione può bloccare anche dipendenze upstream senza fix: non ignorare automaticamente gli avvisi.
 
-Il job deploy mantiene i riferimenti WireGuard originali ma ha `if: false`: nessun push contatta la VM. Sarà abilitato insieme al proprietario dopo backup e collaudo, proteggendo l'environment `lab`.
+Grafana viene costruita dalla base DHI 13.2.2 con il solo plugin InfluxDB 13.1.6, verificato tramite checksum e caricato da un percorso nell'immagine. Installazione automatica dei plugin e aggiornamenti sono disabilitati; il PVC non sostituisce il plugin scansionato. La scansione della candidata è integrata con l'SBOM SPDX firmato della base, preservato in `platform/grafana/security/`: aggiornare base e inventario insieme, seguendo [la procedura](docs/GRAFANA-SBOM.md).
+
+Il deploy usa i Secret WireGuard originali e l'environment `lab`, rifiuta revisioni superate e nodi incompatibili, attende i sei rollout e lancia `postdeploy_check.py`. Quest'ultimo apre port-forward localhost temporanei e verifica salute dei servizi, datasource, corrispondenza delle query della dashboard alla release e letture temperatura/umidità persistite negli ultimi cinque minuti. Non crea allarmi o guasti sul laboratorio: le prove di interruzione avvengono nello stack Docker isolato.
 
 Il training valida dati/classi/unità, fa split stratificato 80/20 con seed 42 e registra hash, versioni, soglia runtime 0.70 e metriche. Il runtime rifiuta un artefatto alterato o incompatibile. I gate di regressione del laboratorio richiedono precisione e recall della classe anomala almeno 0.95 anche quando le variabili CI sono assenti o vuote. `MIN_ANOMALY_RECALL` e `MIN_ANOMALY_PRECISION` consentono override espliciti, registrati nelle metriche. Questi limiti verificano la regressione sul dataset incluso, non sono obiettivi di sicurezza industriale: la release resta sperimentale. Servono dati indipendenti, verifica di drift e costi dei falsi allarmi prima di applicazioni reali. Caricare solo modelli joblib attendibili.
 
