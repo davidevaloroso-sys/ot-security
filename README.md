@@ -2,6 +2,8 @@
 
 ## Stato operativo — 30 settembre 2026
 
+Il run `36743791003` sul commit `15fc489` si è fermato nell'audit npm del runtime Node-RED, prima di build e deploy: `axios 1.19.0` HIGH e `moment 2.30.1` MODERATE. Aggiornati gli override e il lockfile a `axios 1.20.0` e `moment 2.31.0`. Installazione pulita e audit riportano zero vulnerabilità; il collaudo del runtime reale supera avvio, login e ingestione MQTT. Il gate di sicurezza resta attivo.
+
 La preparazione MQTT sulla VM è completata: TLS/IP SAN e quattro login verificati, tre Secret MQTT e `mqtt-ca` creati. La [CI 36740613024](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36740613024) ha superato tutti i gate e la pubblicazione; il deploy si è fermato prima dell'apply perché mancavano soltanto `grafana-influxdb` e `nodered-auth`. La pipeline ora esegue `prepare_observability.py --apply` prima del preflight: prepara solo i Secret assenti, con token emessi dall'InfluxDB esistente e login Node-RED bcrypt. Conserva i Secret presenti, non inizializza il database e non modifica i vecchi file Node-RED. Dettagli e limiti in [K3S-SECRETS.md](docs/K3S-SECRETS.md#preparazione-automatica-di-node-red-e-grafana).
 
 La suite locale aggiornata passa 165 test Python. Le sei build Docker, scansioni HIGH/CRITICAL e integrazione completa della release precedente hanno verificato MQTT TLS, inferenza, token limitati, tutti i pannelli Grafana e recupero dopo un guasto InfluxDB. Il modello mantiene identiche probabilità sulle 10.000 righe del dataset anche nell'immagine Alpine Python 3.11.

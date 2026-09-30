@@ -2,6 +2,14 @@
 
 ## Stato della release
 
+### Audit npm dopo il push 15fc489
+
+Verificato l'ultimo tentativo del run `36743791003`, job `109985384502`: errore in `Validate locked Node-RED runtime`, prima del training e delle build. Il conteggio npm di otto voci (una HIGH, sette MODERATE) comprende i pacchetti che dipendono da `axios 1.19.0` e `moment 2.30.1`; il nodo custom OT aveva audit zero. Nessun deploy è stato tentato da questo run.
+
+Fissati override `axios 1.20.0` e `moment 2.31.0`, con lockfile rigenerato da npm: cambiano soltanto versione, URL e integrità di questi due pacchetti. Versioni corrette confermate dagli advisory upstream [Axios](https://github.com/advisories/GHSA-542g-h47m-68v8) e [Moment](https://github.com/advisories/GHSA-4p3w-j4w9-5jqw). Nessuna esclusione o modifica della soglia dell'audit. Installazione pulita Linux Node 24 e audit del runtime: zero vulnerabilità. Smoke Node-RED reale passato: flusso caricato, login obbligatorio, installazione runtime negata e persistenza dell'ingresso MQTT.
+
+Immagine Docker ricostruita `ot-security-nodered:axios-moment-fix`, manifest `sha256:1328102dd46fcf4838d155d4dc57227c1782f717426aa368ce3f902ff0176e06`; confermate le versioni dei due pacchetti anche dall'interno del container. Trivy 0.74.0 con database aggiornato: zero HIGH/CRITICAL e zero segreti, exit 0. Report locale ignorato da Git in `test-results/nodered-axios-moment-security.json`. Il deploy resta da confermare nella nuova pipeline.
+
 ### Deploy 36740613024: preparazione automatica dei due Secret residui
 
 Confermato dall'output del proprietario il completamento della migrazione MQTT sulla VM: TLS/IP SAN, quattro login, account originale 1883 e creazione dei tre Secret MQTT e della CA. La CI del commit `5dbf97a` ha superato test/training, sei build, scansioni, integrazione e publish. Il job deploy `109979703753` si è fermato prima dell'apply: `NotFound` soltanto per `grafana-influxdb` e `nodered-auth`.
