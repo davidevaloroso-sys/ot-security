@@ -1,6 +1,10 @@
-# Attività e risultati OT-Security — 29 settembre 2026
+# Attività e risultati OT-Security — 29–30 settembre 2026
 
 ## Stato della release
+
+**Concluso: deploy e smoke K3s superati il 30 settembre alle 18:48:53 CEST.** Release `0f98845c92ba2e6471a96d50159f82546d071d47`, [run 36744724064](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36744724064), tutti i job verdi. I due Secret osservabilità sono stati creati, sei rollout completati, salute/datasource/cinque query e dati recenti di temperatura/umidità verificati sul cluster. [Report finale](DEPLOYMENT-2026-09-30.md).
+
+La revisione dopo il deploy ha confrontato endpoint MQTT/TLS, riferimenti dei manifest, renderer e controlli delle query. Nessuna ulteriore incoerenza funzionale emersa; aggiornato il README eliminando stato operativo obsoleto e descrizione errata della base IA. Le sezioni seguenti sono **cronologia dei tentativi**, con i blocchi e gli esiti noti in quel momento; non descrivono lo stato attuale.
 
 ### Audit npm dopo il push 15fc489
 

@@ -1,5 +1,7 @@
 # Preparazione delle credenziali del laboratorio
 
+**Aggiornamento finale del 30 settembre:** i tre Secret MQTT e la CA sono stati creati dalla procedura sulla VM; `grafana-influxdb` e `nodered-auth` sono stati creati dal [run 36744724064](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36744724064), seguito da rollout e smoke riusciti. Il laboratorio è già predisposto: non ripetere la migrazione MQTT o il bootstrap iniziale. L'inventario sottostante documenta il punto di partenza e le procedure restano disponibili per diagnosi e laboratori nuovi.
+
 ## Stato verificato il 29 settembre 2026
 
 Il run [36628560125](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36628560125), commit `b70bd07`, ha superato test, sei build, scansioni, integrazione e pubblicazione. L'API privata ha risposto con `v1.34.6+k3s1`; rete e TLS hanno funzionato. Il preflight si è fermato leggendo `grafana-influxdb`, prima del dry-run e dell'apply.

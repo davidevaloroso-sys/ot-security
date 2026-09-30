@@ -1,5 +1,7 @@
 # Attività che richiedono il laboratorio acceso
 
+**Esito del 30 settembre:** deploy dei sei workload e smoke applicativo superati nel [run 36744724064](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36744724064). [Report delle verifiche eseguite](DEPLOYMENT-2026-09-30.md). La checklist seguente include anche prove estese non eseguite sul cluster, come ripristino backup, guasti e verifica negativa delle NetworkPolicy.
+
 API K3s e broker MQTT sulla VM: **192.168.1.21**. Il runner apre WireGuard tramite **k3s--lab.cloud-ip.cc:51820/UDP** e interroga **https://192.168.1.21:6443** nel tunnel. Il proprietario ha autorizzato deploy e uso dei Secret GitHub. Il job è abilitato sui push a main dopo tutti i gate; questa checklist non attesta prove già eseguite. Consultare `REMEDIATION-STATUS.md` per gli esiti effettivi.
 
 | Passo | Cosa verificare sul server | Esito atteso |
@@ -29,7 +31,7 @@ API K3s e broker MQTT sulla VM: **192.168.1.21**. Il runner apre WireGuard trami
 5. Rollout, dashboard, isolamento e guasti.
 6. Verifica backup/ripristino e registrazione degli esiti.
 
-I comandi di bootstrap e creazione Secret sono nel README. La [verifica delle risorse mancanti](K3S-SECRETS.md) riporta l'inventario attuale e la preparazione del broker esistente. Non incollare password, token, chiavi private o kubeconfig in chat. Non eliminare PVC per risolvere problemi di avvio.
+I comandi di bootstrap e creazione Secret sono nel README. La [verifica delle risorse mancanti](K3S-SECRETS.md) riporta l'inventario iniziale e il successivo completamento della preparazione. Non incollare password, token, chiavi private o kubeconfig in chat. Non eliminare PVC per risolvere problemi di avvio.
 
 ## Limiti indipendenti dal server
 
