@@ -265,7 +265,7 @@ jobs:
           # API traffic uses the private IP; leave public DNS resolution intact.
           ip route get 192.168.1.21
           echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
-      - name: Validate API and deploy versioned workloads
+      - name: Validate API, prepare missing credentials and deploy workloads
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -273,6 +273,8 @@ jobs:
           python scripts/preflight.py --cluster-only
           kubectl --request-timeout=30s get --raw=/version
           python scripts/render_release.py "$GITHUB_SHA" --output rendered
+          test "$(gh api repos/$GITHUB_REPOSITORY/commits/main --jq .sha)" = "$GITHUB_SHA"
+          python scripts/prepare_observability.py --apply
           python scripts/preflight.py rendered
           kubectl --request-timeout=60s apply --dry-run=server -f rendered
           test "$(gh api repos/$GITHUB_REPOSITORY/commits/main --jq .sha)" = "$GITHUB_SHA"

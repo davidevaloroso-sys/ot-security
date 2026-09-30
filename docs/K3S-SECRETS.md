@@ -15,7 +15,21 @@ L'inventario eseguito dal proprietario sulla VM ha poi confermato:
 | ConfigMap `mqtt-ca` | Assente |
 | Deployment precedenti, incluso OpenPLC | Sette disponibili; questo non attesta la nuova release |
 
-Questi sono Secret **Kubernetes sulla VM**, distinti dai Secret GitHub per la VPN, il kubeconfig e Docker Hub. La CI richiede credenziali già predisposte: non inventa account sul broker, non emette token InfluxDB e non sovrascrive i Secret presenti.
+Questi sono Secret **Kubernetes sulla VM**, distinti dai Secret GitHub per la VPN, il kubeconfig e Docker Hub. L'inventario sopra descrive il blocco iniziale. La preparazione MQTT è poi stata completata dal proprietario; la CI può ora creare i soli Secret Node-RED/Grafana mancanti come descritto sotto. Non crea account sul broker e non sovrascrive Secret presenti.
+
+## Preparazione automatica di Node-RED e Grafana
+
+Il run `36740613024` ha confermato come unici prerequisiti mancanti `grafana-influxdb` e `nodered-auth`. `scripts/prepare_observability.py --apply` viene eseguito dalla pipeline dopo la connessione VPN e il controllo dello SHA corrente, prima del preflight e dell'apply dei workload.
+
+La procedura legge `INFLUXDB_ADMIN_TOKEN`, `INFLUXDB_ORG` e `INFLUXDB_BUCKET` da `observability-secrets` senza stamparli. Apre un port-forward solo su localhost, verifica che il database sia già inizializzato e trovi esattamente org/bucket previsti. Emette un token con solo lettura del bucket per Grafana e uno con sola scrittura per Node-RED. Non invoca setup, non modifica dati, PVC, token originali o flussi esistenti.
+
+Per Node-RED esegue nel pod esistente una lettura dei file in `/data` e la generazione bcrypt, senza installare moduli o valutare `settings.js`. Riutilizza la chiave automatica da `.config.runtime.json`; in assenza di credenziali salvate può generarne una nuova. Si ferma prima di emettere token se rileva un `credentialSecret` esplicito o credenziali salvate senza una chiave identificabile. Questi casi richiedono una migrazione specifica, non una sostituzione alla cieca.
+
+Il nuovo utente è `ot-admin`. Il Secret `nodered-auth` conserva anche `NODE_RED_ADMIN_PASSWORD` per il recupero da parte dell'amministratore del cluster; il deployment riceve soltanto l'hash bcrypt, non la password in chiaro. Recuperare la password sul terminale amministrativo, senza incollarla in chat o nei log. I Secret completi già presenti vengono conservati integralmente, senza generare nuove password o token. Secret presenti ma incompleti causano uno stop.
+
+Ogni token appena emesso viene immediatamente inviato al relativo Secret con `create`, mai `apply` o sostituzione. Le autorizzazioni sono identificate dalle descrizioni `ot-security-bootstrap/grafana-influxdb` e `ot-security-bootstrap/nodered-auth`. Un retry riutilizza un'autorizzazione compatibile solo se il server ne rende ancora disponibile il token. **InfluxDB 2.9 non riespone il token dopo la creazione**: se la creazione del Secret fallisce dopo l'emissione, la procedura si ferma e richiede recupero/intervento amministrativo, senza emettere duplicati o revocare nulla. La creazione del token e del Secret non è una transazione atomica.
+
+Senza `--apply` lo script verifica i prerequisiti senza creare Secret o token. Richiede `kubectl`, accesso all'API e permessi di lettura/creazione Secret, exec Node-RED e port-forward InfluxDB. Errori grezzi e valori delle credenziali restano esclusi dai log. Il collaudo `tests/observability_smoke.py` usa InfluxDB e Node-RED reali in container temporanei, con Kubernetes simulato: verifica permessi effettivi, bcrypt, chiave preservata, riesecuzioni e rifiuto di configurazioni ambigue.
 
 Il controllo successivo del proprietario conferma Mosquitto come servizio attivo sull'host, listener `0.0.0.0:1883`, `allow_anonymous false`, password file `/etc/mosquitto/passwd`, configurazione in `/etc/mosquitto/conf.d/ot.conf`. Nessun listener 8883 è emerso; `docker ps` era vuoto. Occorre preparare il broker TLS, oltre ai Secret.
 

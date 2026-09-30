@@ -2,6 +2,14 @@
 
 ## Stato della release
 
+### Deploy 36740613024: preparazione automatica dei due Secret residui
+
+Confermato dall'output del proprietario il completamento della migrazione MQTT sulla VM: TLS/IP SAN, quattro login, account originale 1883 e creazione dei tre Secret MQTT e della CA. La CI del commit `5dbf97a` ha superato test/training, sei build, scansioni, integrazione e publish. Il job deploy `109979703753` si è fermato prima dell'apply: `NotFound` soltanto per `grafana-influxdb` e `nodered-auth`.
+
+Introdotta preparazione automatica prima del preflight, con controllo SHA: usa le credenziali InfluxDB originali per verificare org/bucket esistenti ed emettere due token limitati. Crea solo Secret assenti, preserva quelli presenti e rifiuta quelli incompleti. Recupera la chiave automatica Node-RED se disponibile; configurazioni esplicite/ambigue fermano la procedura. Login nuovo `ot-admin`, hash bcrypt e password di recupero conservati nel Secret; valori mai nei log. Nessun reset DB, modifica PVC o riscrittura dei flussi precedenti durante la preparazione.
+
+17 test mirati passati; Bandit Medium/High senza risultati. Collaudo Docker reale passato con InfluxDB 2.9.1 e Node-RED: token read/write con accessi opposti negati, chiave legacy conservata, bcrypt, nessuna modifica al secondo passaggio, configurazioni di cifratura ambigue rifiutate. Il test ha confermato che InfluxDB 2.9 non restituisce nuovamente i token: un errore fra emissione e creazione Secret richiede intervento e non provoca duplicati automatici. Kubernetes è simulato in questo collaudo; l'esito della nuova pipeline e il rollout restano da verificare.
+
 ### Correzione della migrazione dopo l'ispezione di ot.conf
 
 Il proprietario ha confermato una quarta direttiva `persistence` in `ot.conf`; il valore è stato oscurato nell'output diagnostico. Il controllo troppo rigido rifiutava il file prima di qualsiasi scrittura. Lo script ora ammette una singola direttiva `persistence true` o `persistence false`, lasciando il file integro e senza spostare l'impostazione rispetto al file principale. Restano rifiutati valori invalidi, duplicati, listener/password file alternativi, plugin e modifiche all'autenticazione.
