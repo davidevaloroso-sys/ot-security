@@ -3,9 +3,14 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
+import sys
 import yaml
 
 K3S_API_SERVER = 'https://192.168.1.21:6443'
+
+
+class PreflightError(RuntimeError):
+    """Only sanitized diagnostic text may be included in this exception."""
 
 
 def inspect(directory):
@@ -41,8 +46,52 @@ def inspect(directory):
 
 
 def kubectl_json(*args):
-    result = subprocess.run(['kubectl', *args, '-o', 'json'], check=True, capture_output=True, text=True, timeout=30)
-    return json.loads(result.stdout)
+    try:
+        result = subprocess.run(['kubectl', '--request-timeout=25s', *args, '-o', 'json'],
+                                check=False, capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        raise PreflightError('Timeout: kubectl did not complete within 30 seconds') from None
+    except OSError:
+        raise PreflightError('Unable to start kubectl; check the local installation') from None
+    if result.returncode:
+        # Never echo stderr/stdout: authentication plugins and Secret responses can
+        # contain credentials. Report only recognized error categories.
+        reasons = {
+            '(NotFound)': 'NotFound: resource absent in the selected cluster/namespace',
+            '(Forbidden)': 'Forbidden: kubeconfig identity lacks permission to read this resource',
+            '(Unauthorized)': 'Unauthorized: kubeconfig credentials were not accepted',
+            'x509:': 'TLS certificate verification failed',
+            'context deadline exceeded': 'Timeout contacting the Kubernetes API',
+            'i/o timeout': 'Timeout contacting the Kubernetes API',
+            'connection refused': 'Connection to the Kubernetes API was refused',
+        }
+        reason = next((message for marker, message in reasons.items() if marker in result.stderr),
+                      'kubectl failed; check access with the same kubeconfig (raw output withheld)')
+        raise PreflightError(reason)
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        raise PreflightError('kubectl returned invalid JSON (raw output withheld)') from None
+
+
+def check_resources(secrets, maps):
+    problems = []
+    for kind, expected in [('secret', secrets), ('configmap', maps)]:
+        for name, keys in sorted(expected.items()):
+            label = f'{kind} ot-namespace/{name}'
+            try:
+                resource = kubectl_json('-n', 'ot-namespace', 'get', kind, name)
+            except PreflightError as error:
+                problems.append(f'{label}: {error}')
+                continue
+            data = resource.get('data') or {}
+            missing = sorted(key for key in keys if not data.get(key))
+            if missing:
+                problems.append(f'{label}: missing or empty keys: {", ".join(missing)}')
+    if problems:
+        raise PreflightError('Required cluster resources are not ready:\n- '
+                             + '\n- '.join(problems)
+                             + '\nSee docs/K3S-SECRETS.md. No credentials were changed.')
 
 
 def validate_cluster(cluster):
@@ -120,16 +169,14 @@ def main():
     if not args.offline:
         check_cluster()
         check_nodes()
-        for kind, expected in [('secret', secrets), ('configmap', maps)]:
-            for name, keys in expected.items():
-                resource = kubectl_json('-n', 'ot-namespace', 'get', kind, name)
-                missing = keys - resource.get('data', {}).keys()
-                if missing:
-                    raise ValueError(f'Missing keys in {kind} {name}: {sorted(missing)}')
+        check_resources(secrets, maps)
     for name, keys in sorted(secrets.items()):
         print(f'{name}: {", ".join(sorted(keys))}')
     print('Preflight passed' + (' (offline: cluster contents not checked)' if args.offline else ''))
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except PreflightError as error:
+        sys.exit(f'Preflight failed: {error}')

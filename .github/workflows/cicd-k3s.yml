@@ -229,6 +229,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: test "$(gh api repos/$GITHUB_REPOSITORY/commits/main --jq .sha)" = "$GITHUB_SHA"
+      - name: Install kubectl compatible with the laboratory API
+        env:
+          # Observed server: v1.34.6+k3s1. Update this pin with the cluster.
+          KUBECTL_VERSION: v1.34.6
+        run: |
+          mkdir -p "$RUNNER_TEMP/ot-tools"
+          base="https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+          curl --fail --silent --show-error --location --retry 3 "$base" -o "$RUNNER_TEMP/ot-tools/kubectl"
+          curl --fail --silent --show-error --location --retry 3 "$base.sha256" -o "$RUNNER_TEMP/kubectl.sha256"
+          printf '%s  %s\n' "$(cat "$RUNNER_TEMP/kubectl.sha256")" "$RUNNER_TEMP/ot-tools/kubectl" | sha256sum --check
+          chmod 0755 "$RUNNER_TEMP/ot-tools/kubectl"
+          echo "$RUNNER_TEMP/ot-tools" >> "$GITHUB_PATH"
       - name: Configure VPN and kubeconfig
         env:
           WG_PRIVATE: ${{ secrets.WG_CLIENT_PRIVATE_KEY }}

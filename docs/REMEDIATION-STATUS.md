@@ -2,6 +2,22 @@
 
 ## Stato della release
 
+### Ripresa del 30 settembre: preparazione MQTT
+
+Il proprietario ha verificato Mosquitto attivo come servizio sulla VM, con autenticazione sulla sola porta 1883; nessun container Docker attivo. La configurazione rilevata usa `/etc/mosquitto/conf.d/ot.conf` e `/etc/mosquitto/passwd`. Il nuovo deploy richiede il listener TLS 8883: creare i Secret senza configurare il broker non sarebbe sufficiente.
+
+Aggiunto `scripts/prepare_mqtt_tls.py`: controllo iniziale senza scritture, migrazione esplicita con `--apply`, conservazione di listener/password file precedenti, CA privata e IP SAN `.21`, quattro account TLS con ACL per ruolo, riavvio con ripristino configurazione in caso di errore, verifica login e creazione dei soli tre Secret MQTT mancanti e del ConfigMap CA. Backup e nuove credenziali restano protetti sulla VM; nessun valore nei log, negli argomenti dei processi o in Git. L'account audit originale non viene ruotato. Il nuovo script non viene eseguito automaticamente dalla CI e non è ancora stato applicato alla VM.
+
+Colloquio con il broker collaudato in un container Linux temporaneo: controllo senza modifiche, migrazione, TLS, quattro login, conservazione del login sulla 1883, rifiuto password e IP SAN errati, permessi root/gruppo Mosquitto, risorse Kubernetes create una volta e blocco delle riesecuzioni. Kubernetes e systemctl sono simulati nel test; il broker, certificati e autenticazione sono reali. Il primo tentativo di test mancava dello stub systemctl nel container, corretto prima del collaudo riuscito. Suite locale: 138 test. Bandit comprende il nuovo script, con una sola eccezione B103 documentata per il bit di attraversamento della directory da parte del gruppo Mosquitto (0710, nessuna scrittura di gruppo o accesso agli altri).
+
+Restano da applicare la preparazione MQTT sulla VM, creare i token e il Secret Node-RED per l'InfluxDB esistente, poi verificare preflight, rollout e postdeploy. Il client SSH locale non ha una chiave host conosciuta per `.21`; non è stato stabilito un accesso SSH al server. Il report richiesto va pubblicato nella conversazione cloud del progetto OT-Security, senza dichiarare il deploy completato.
+
+Aggiornamento dopo il run [36628560125](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36628560125), commit `b70bd07`: test/training, sei build, scansioni, integrazione e publish superati. Il runner raggiunge l'API con TLS verificato e riceve `v1.34.6+k3s1`. Il deploy fallisce leggendo `grafana-influxdb`, prima di dry-run/apply. Il traceback precedente nascondeva stderr: da solo non distingueva assenza e RBAC. L'inventario locale fornito dal proprietario conferma soltanto `mqtt-credentials` e `observability-secrets` fra i Secret e soltanto `kube-root-ca.crt` fra i ConfigMap. Mancano quindi cinque Secret applicativi e `mqtt-ca`; i sette deployment precedenti sono disponibili.
+
+Correzione successiva: il preflight classifica gli errori senza stampare stdout/stderr, verifica tutte le risorse richieste e segnala anche le chiavi vuote. Nessuna credenziale viene creata o modificata. Aggiunta [procedura di verifica e preparazione](K3S-SECRETS.md); TLS/account del broker sono ancora da verificare sulla VM. Allineato inoltre il client CI a `kubectl v1.34.6`, con verifica del checksum ufficiale, perché quello preinstallato `v1.37.1` superava lo scarto supportato dal server.
+
+Validazione locale di questa correzione: 138 test Python superati, Bandit Medium+/confidenza Medium+ senza rilievi, actionlint e preflight offline superati, 25 risorse valide con kubeconform. Verificati download, SHA256 e avvio del client Linux `v1.34.6` in Docker con checkout in sola lettura. Il deploy resta da completare dopo il provisioning delle risorse reali del laboratorio.
+
 Il proprietario ha autorizzato correzioni, push diretto a `main`, test e deploy K3s; ha confermato l'uso dei Secret GitHub WireGuard/Kubeconfig già configurati. Docker Desktop Linux è ora disponibile. Il PC non ha un contesto Kubernetes locale: il job GitHub nell'environment `lab` apre WireGuard tramite `k3s--lab.cloud-ip.cc:51820` e raggiunge l'API privata `192.168.1.21:6443`; la stessa VM ospita anche il broker MQTT.
 
 Il [run remoto 36624149826](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36624149826), sul commit `9435bf8`, ha superato test/training, sei build, scansioni, integrazione e publish. Il deploy si è fermato prima dell'apply con `x509: certificate is valid for ..., not k3s--lab.cloud-ip.cc`. Il proprietario ha chiarito che il DDNS serve solo alla VPN. La nuova configurazione elimina il nome DNS dall'API e mantiene la verifica TLS sull'IP privato; il nuovo rollout non è ancora confermato. Dettagli in [K3S-TLS.md](K3S-TLS.md).
@@ -29,7 +45,7 @@ Verifica locale della correzione DDNS/API: 110 test Python superati, Bandit senz
 
 | Verifica | Esito |
 |---|---|
-| Pytest, ambiente Python 3.12.14 | 110 test passati dopo la separazione DDNS/VPN e API privata |
+| Pytest, ambiente Python 3.12.14 | 138 test passati dopo la diagnosi degli errori del preflight |
 | Cinque build Docker Linux | Passate; Python runtime 3.11.16 |
 | Caricamento modello IA, UID 10001, filesystem read-only, rete assente | Passato |
 | Portabilità modello su 10.000 righe | Differenza massima probabilità 0.0, classi identiche a soglia 0.70 |

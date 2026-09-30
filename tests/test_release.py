@@ -1,5 +1,7 @@
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
 import pytest
 import yaml
 from conftest import ROOT
@@ -170,3 +172,76 @@ def test_prepare_rejects_bad_config_without_writing_or_leaking(tmp_path, damage)
         module('preflight').prepare_kubeconfig(path)
     assert 'test-key-data' not in str(error.value)
     assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize(('stderr', 'reason'), [
+    ('Error from server (NotFound)', 'NotFound'),
+    ('Error from server (Forbidden)', 'Forbidden'),
+    ('Error from server (Unauthorized)', 'Unauthorized'),
+    ('x509: certificate is invalid', 'TLS'),
+    ('context deadline exceeded', 'Timeout'),
+    ('dial tcp: i/o timeout', 'Timeout'),
+    ('connection refused', 'refused'),
+    ('authentication plugin failure', 'raw output withheld'),
+])
+def test_kubectl_errors_classified_without_leaking(monkeypatch, stderr, reason):
+    preflight = module('preflight')
+    def run(command, **kwargs):
+        return subprocess.CompletedProcess(command, 1, 'sensitive-stdout', stderr + ' sensitive-stderr')
+    monkeypatch.setattr(preflight.subprocess, 'run', run)
+    with pytest.raises(preflight.PreflightError, match=reason) as error:
+        preflight.kubectl_json('-n', 'ot-namespace', 'get', 'secret', 'grafana-influxdb')
+    assert 'sensitive' not in str(error.value)
+
+
+@pytest.mark.parametrize('failure', ['timeout', 'executable', 'json'])
+def test_kubectl_local_failures_do_not_leak(monkeypatch, failure):
+    preflight = module('preflight')
+    def run(command, **kwargs):
+        if failure == 'timeout':
+            raise subprocess.TimeoutExpired(command, 30, output='sensitive', stderr='sensitive')
+        if failure == 'executable':
+            raise OSError('sensitive')
+        return subprocess.CompletedProcess(command, 0, 'invalid JSON sensitive', '')
+    monkeypatch.setattr(preflight.subprocess, 'run', run)
+    with pytest.raises(preflight.PreflightError) as error:
+        preflight.kubectl_json('get', 'nodes')
+    assert 'sensitive' not in str(error.value)
+    assert error.value.__suppress_context__
+
+
+def test_resource_preflight_reports_all_missing_denied_and_empty_keys(monkeypatch):
+    preflight = module('preflight')
+    commands = []
+    def run(command, **kwargs):
+        commands.append(command)
+        assert '--request-timeout=25s' in command
+        if 'grafana-influxdb' in command:
+            return subprocess.CompletedProcess(command, 1, '', 'Error from server (NotFound): sensitive')
+        if 'mqtt-nodered' in command:
+            return subprocess.CompletedProcess(command, 1, '', 'Error from server (Forbidden): sensitive')
+        data = {'NODE_RED_ADMIN_USER': 'sensitive', 'INFLUXDB_WRITE_TOKEN': ''} if 'nodered-auth' in command else {}
+        return subprocess.CompletedProcess(command, 0, json.dumps({'data': data}), '')
+    monkeypatch.setattr(preflight.subprocess, 'run', run)
+    with pytest.raises(preflight.PreflightError) as error:
+        preflight.check_resources({
+            'grafana-influxdb': {'INFLUXDB_READ_TOKEN'},
+            'mqtt-nodered': {'username', 'password'},
+            'nodered-auth': {'NODE_RED_ADMIN_USER', 'INFLUXDB_WRITE_TOKEN', 'NODE_RED_CREDENTIAL_SECRET'},
+        }, {'mqtt-ca': {'ca.crt'}})
+    message = str(error.value)
+    assert 'grafana-influxdb: NotFound' in message
+    assert 'mqtt-nodered: Forbidden' in message
+    assert 'INFLUXDB_WRITE_TOKEN' in message and 'NODE_RED_CREDENTIAL_SECRET' in message
+    assert 'NODE_RED_ADMIN_USER' not in message
+    assert 'configmap ot-namespace/mqtt-ca' in message and 'ca.crt' in message
+    assert 'sensitive' not in message
+    assert len(commands) == 4
+    assert all('get' in command for command in commands)
+
+
+def test_resource_preflight_accepts_complete_resources_without_output(monkeypatch, capsys):
+    preflight = module('preflight')
+    monkeypatch.setattr(preflight, 'kubectl_json', lambda *args: {'data': {'key': 'sensitive'}})
+    preflight.check_resources({'example': {'key'}}, {'example-ca': {'key'}})
+    assert capsys.readouterr().out == ''

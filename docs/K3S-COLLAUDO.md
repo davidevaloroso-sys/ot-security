@@ -29,7 +29,7 @@ API K3s e broker MQTT sulla VM: **192.168.1.21**. Il runner apre WireGuard trami
 5. Rollout, dashboard, isolamento e guasti.
 6. Verifica backup/ripristino e registrazione degli esiti.
 
-I comandi di bootstrap e creazione Secret sono nel README. Non incollare password, token, chiavi private o kubeconfig in chat. Non eliminare PVC per risolvere problemi di avvio.
+I comandi di bootstrap e creazione Secret sono nel README. La [verifica delle risorse mancanti](K3S-SECRETS.md) riporta l'inventario attuale e la preparazione del broker esistente. Non incollare password, token, chiavi private o kubeconfig in chat. Non eliminare PVC per risolvere problemi di avvio.
 
 ## Limiti indipendenti dal server
 
