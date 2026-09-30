@@ -31,6 +31,8 @@ Ricontrollati renderer, riferimenti a Secret, indirizzo broker, porta TLS e quer
 
 Il laboratorio non è qualificato come impianto industriale. Questo run non prova backup/ripristino, durabilità a guasti del nodo o enforcement delle NetworkPolicy tramite client negati. Le policy sono state applicate; i test di guasto e permessi eseguiti in Docker non vengono presentati come prove sul cluster. OpenPLC resta opzionale e fuori dai sei rollout. Il listener legacy MQTT 1883 è stato preservato; la sua dismissione richiede verifica dei client precedenti.
 
+Al push della documentazione GitHub segnala ancora [un avviso Dependabot MODERATE, numero 2](https://github.com/davidevaloroso-sys/ot-security/security/dependabot/2). Il dettaglio non è accessibile con il connettore disponibile né dalla sessione browser non autenticata; pacchetto e applicabilità non sono stati verificati e l'avviso non viene dichiarato risolto. Questo conteggio è distinto dall'audit npm e dal gate HIGH/CRITICAL superati nella CI della release.
+
 ## Accesso e documentazione
 
 Node-RED usa `ot-admin`; la password iniziale è conservata in `nodered-auth`, chiave `NODE_RED_ADMIN_PASSWORD`, per recupero locale da parte dell'amministratore Kubernetes. Grafana conserva le credenziali originali di `observability-secrets`. Non copiare valori in report o chat.
