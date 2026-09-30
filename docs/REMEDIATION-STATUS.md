@@ -2,6 +2,20 @@
 
 ## Stato della release
 
+### Correzione della migrazione dopo l'ispezione di ot.conf
+
+Il proprietario ha confermato una quarta direttiva `persistence` in `ot.conf`; il valore è stato oscurato nell'output diagnostico. Il controllo troppo rigido rifiutava il file prima di qualsiasi scrittura. Lo script ora ammette una singola direttiva `persistence true` o `persistence false`, lasciando il file integro e senza spostare l'impostazione rispetto al file principale. Restano rifiutati valori invalidi, duplicati, listener/password file alternativi, plugin e modifiche all'autenticazione.
+
+Verifica: 25 test mirati passati. Collaudo in container temporaneo con Mosquitto reale passato: configurazione legacy con persistenza abilitata, database creato durante il riavvio, conservazione byte per byte di `ot.conf` e del password file, TLS e quattro login, account originale sulla 1883, rifiuto di password/IP errati, permessi privati e protezione dalle riesecuzioni. Kubernetes e il gestore del servizio sono simulati nel test; questo esito non attesta ancora la migrazione sulla VM.
+
+### Verifica del 30 settembre, ripresa delle 09:00 CEST
+
+La [CI 36658383049](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36658383049), commit `efb17b548943c2c1936c89b3a52c6582db7de841`, ha superato test/training, sei build, security scan, integration e publish. Il job `deploy_k3s` (`109710601125`) ha raggiunto l'API K3s `v1.34.6+k3s1`; si è fermato prima dell'apply per risorse assenti in `ot-namespace`: Secret `grafana-influxdb`, `mqtt-ia-consumer`, `mqtt-nodered`, `mqtt-raspi-simulator`, `nodered-auth` e ConfigMap `mqtt-ca`. Il log classifica tutti i casi come `NotFound`; non indica un errore di apply o di permessi.
+
+Il proprietario ha scaricato e verificato tramite SHA256 `prepare_mqtt_tls.py` dal commit `c552cb0`, quindi eseguito `--apply`. La procedura è terminata con `Legacy ot.conf differs from the inspected three-line configuration`, durante i controlli iniziali e prima delle mutazioni. Il precedente grep mostrava solo alcune direttive e non provava che il file ne contenesse esattamente tre. Richiesto un inventario filtrato delle direttive di `ot.conf`, senza valori di credenziali, per distinguere differenze di formattazione da configurazioni aggiuntive. Non è stato indebolito il controllo né rilanciato un deploy destinato a fallire sullo stesso prerequisito.
+
+Aggiornamento inviato alla conversazione cloud del report. Rollout e collaudo sul cluster restano da completare; i workload precedenti non attestano la nuova release.
+
 ### Blocco npm rilevato e corretto il 30 settembre
 
 Il commit `c552cb0` è stato pubblicato direttamente su main con diagnostica del preflight, client kubectl compatibile e procedura MQTT. La [CI 36657062263](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36657062263) si è fermata in `Validate locked Node-RED runtime`: `undici 6.28.0` incluso in `npm 11.19.1` risulta HIGH; build, publish e deploy saltati. I precedenti override non sostituivano i package incorporati. Le release npm 11.20.0/12.1.0 verificate contengono ancora i bundle vulnerabili.

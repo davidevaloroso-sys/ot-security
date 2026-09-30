@@ -62,6 +62,38 @@ def test_only_inspected_broker_layout_is_accepted(tmp_path, change):
             helper.check_layout(tmp_path)
 
 
+@pytest.mark.parametrize('value', ['true', 'false'])
+def test_legacy_persistence_is_preserved_without_rewriting(tmp_path, value):
+    helper = module('prepare_mqtt_tls')
+    layout(tmp_path)
+    legacy = tmp_path/'conf.d/ot.conf'
+    original = legacy.read_bytes() + f'persistence {value}\n'.encode()
+    legacy.write_bytes(original)
+    main_before = (tmp_path/'mosquitto.conf').read_bytes()
+    assert helper.check_layout(tmp_path) == main_before
+    assert legacy.read_bytes() == original
+
+
+@pytest.mark.parametrize('addition', [
+    'persistence true\npersistence false\n', 'persistence\n',
+    'persistence invalid-secret-value\n', 'persistence true extra\n',
+    'persistence true\nallow_anonymous true\n',
+    'persistence true\nlistener 1884\n',
+    'persistence true\npassword_file /other\n',
+    'persistence true\nplugin /other\n',
+])
+def test_persistence_does_not_bypass_layout_validation(tmp_path, addition):
+    helper = module('prepare_mqtt_tls')
+    layout(tmp_path)
+    legacy = tmp_path/'conf.d/ot.conf'
+    original = legacy.read_bytes() + addition.encode()
+    legacy.write_bytes(original)
+    with pytest.raises(helper.SetupError) as error:
+        helper.check_layout(tmp_path)
+    assert 'invalid-secret-value' not in str(error.value)
+    assert legacy.read_bytes() == original
+
+
 def test_private_files_never_overwrite(tmp_path):
     helper = module('prepare_mqtt_tls')
     path = tmp_path/'credentials'

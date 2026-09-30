@@ -64,8 +64,16 @@ def check_layout(directory):
         raise SetupError('Review symlinked Mosquitto configuration before migrating')
     expected = ['listener 1883 0.0.0.0', 'allow_anonymous false',
                 'password_file /etc/mosquitto/passwd']
-    if directives(legacy.read_text()) != expected:
-        raise SetupError('Legacy ot.conf differs from the inspected three-line configuration')
+    legacy_options = directives(legacy.read_text())
+    persistence = [line for line in legacy_options if line.split()[0] == 'persistence']
+    # Global boolean observed in ot.conf. Preserve the file and its position:
+    # moving this option could change precedence relative to mosquitto.conf.
+    if len(persistence) > 1 or any(line.split() not in (
+            ['persistence', 'true'], ['persistence', 'false']) for line in persistence):
+        raise SetupError('Legacy ot.conf requires a single valid persistence boolean; values withheld')
+    security_options = [line for line in legacy_options if line.split()[0] != 'persistence']
+    if security_options != expected:
+        raise SetupError('Legacy ot.conf has unexpected listener/authentication settings; review before migrating')
     allowed = {'pid_file', 'persistence', 'persistence_location', 'log_dest',
                'log_type', 'connection_messages', 'include_dir'}
     options = directives(main.read_text())

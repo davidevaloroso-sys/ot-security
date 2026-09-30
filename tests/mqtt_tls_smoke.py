@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import pwd
 import socket
 import ssl
 import subprocess
@@ -28,10 +29,18 @@ def main():
     for path in (helper.CONFIG/'conf.d').glob('*.conf'):
         raise AssertionError('Unexpected preexisting configuration: ' + str(path))
     main_config = helper.CONFIG/'mosquitto.conf'
-    main_config.write_text('persistence false\nlog_dest stderr\ninclude_dir /etc/mosquitto/conf.d\n')
+    broker_data = Path('/tmp/ot-mqtt-data')
+    broker_data.mkdir(mode=0o700)
+    broker_account = pwd.getpwnam('mosquitto')
+    os.chown(broker_data, broker_account.pw_uid, broker_account.pw_gid)
+    main_config.write_text('persistence false\npersistence_location /tmp/ot-mqtt-data/\n'
+                           'log_dest stderr\ninclude_dir /etc/mosquitto/conf.d\n')
     original = main_config.read_bytes()
-    (helper.CONFIG/'conf.d/ot.conf').write_text(
-        'listener 1883 0.0.0.0\nallow_anonymous false\npassword_file /etc/mosquitto/passwd\n')
+    legacy_config = helper.CONFIG/'conf.d/ot.conf'
+    legacy_config.write_text(
+        'listener 1883 0.0.0.0\nallow_anonymous false\npassword_file /etc/mosquitto/passwd\n'
+        'persistence true\n')
+    legacy_original = legacy_config.read_bytes()
     password_file = helper.CONFIG/'passwd'
     password_file.write_text('audit:existing-test-password\n')
     helper.run(['mosquitto_passwd', '-H', 'sha512-pbkdf2', '-U', password_file])
@@ -94,6 +103,8 @@ def main():
         assert resources[('secret', 'mqtt-credentials')] == audit
         assert len(resources) == 5
         assert password_file.read_bytes() == previous_passwords
+        assert legacy_config.read_bytes() == legacy_original
+        assert (broker_data/'mosquitto.db').is_file(), 'Existing persistence must survive migration'
         assert main_config.read_bytes() == b'per_listener_settings true\n' + original
         assert helper.STATE.stat().st_mode & 0o777 == 0o700
         assert (helper.STATE/'ca.key').stat().st_mode & 0o777 == 0o600

@@ -52,7 +52,7 @@ Dal checkout aggiornato sulla VM Ubuntu, eseguire prima il controllo senza modif
 sudo python3 scripts/prepare_mqtt_tls.py
 ```
 
-Richiede `k3s`, `openssl`, `mosquitto_passwd`, `systemctl` e accesso amministrativo locale a Kubernetes. Non richiede pacchetti Python aggiuntivi. Verifica la configurazione a tre righe rilevata, l'account audit sulla 1883 e l'assenza delle risorse da creare. Si ferma se trova configurazioni aggiuntive, file di una precedente migrazione o credenziali già predisposte.
+Richiede `k3s`, `openssl`, `mosquitto_passwd`, `systemctl` e accesso amministrativo locale a Kubernetes. Non richiede pacchetti Python aggiuntivi. Verifica le tre direttive di listener/autenticazione rilevate, l'account audit sulla 1883 e l'assenza delle risorse da creare. Accetta anche una singola direttiva globale `persistence true` oppure `persistence false` in `ot.conf`, confermata sulla VM il 30 settembre: ne conserva valore e posizione senza riscrivere il file. Si ferma su valori invalidi o duplicati, altre configurazioni aggiuntive, file di una precedente migrazione o credenziali già predisposte. Il significato della direttiva è documentato nel [manuale Mosquitto](https://mosquitto.org/man/mosquitto-conf-5.html).
 
 Per applicare la preparazione MQTT:
 
