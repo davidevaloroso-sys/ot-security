@@ -1,6 +1,6 @@
 // Real Node-RED runtime smoke. Set NODE_RED_RUNTIME to the installed red.js.
 const assert = require('node:assert/strict');
-const {spawn} = require('node:child_process');
+const {spawn, spawnSync} = require('node:child_process');
 const {once} = require('node:events');
 const {setTimeout: delay} = require('node:timers/promises');
 const fs = require('node:fs');
@@ -15,6 +15,17 @@ const aedes = require('aedes');
   assert(process.env.NODE_RED_RUNTIME, 'NODE_RED_RUNTIME required');
   const root = path.resolve(__dirname, '../../..');
   const runtime = path.resolve(process.env.NODE_RED_RUNTIME);
+  const registry = require.resolve('@node-red/registry/package.json', {paths:[path.dirname(runtime)]});
+  const npmManifest = require.resolve('npm/package.json', {paths:[path.dirname(registry)]});
+  assert.equal(require(npmManifest).name, '@ot-security/disabled-npm', 'runtime must not embed the npm installer');
+  for (const args of [['--version'], ['install', 'test-argument-must-not-be-logged']]) {
+    const denied = spawnSync(process.execPath, [path.join(path.dirname(npmManifest), 'bin/npm-cli.js'), ...args],
+      {encoding:'utf8', windowsHide:true, timeout:5000});
+    assert.equal(denied.status, 1, 'package manager adapter must reject every invocation');
+    assert.equal(denied.stdout, '');
+    assert.match(denied.stderr, /Runtime package installation is disabled/);
+    assert(!denied.stderr.includes('test-argument-must-not-be-logged'));
+  }
   const bcrypt = require(require.resolve('bcryptjs', {paths:[path.dirname(runtime)]}));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ot-runtime-'));
   const broker = aedes(); const tcp = net.createServer(broker.handle);
@@ -42,11 +53,15 @@ const aedes = require('aedes');
     assert.equal(auth.status,200);const token=(await auth.json()).access_token;assert(token);
     const flows=await fetch(base+'/flows',{headers:{Authorization:`Bearer ${token}`}});
     assert.equal(flows.status,200);assert((await flows.json()).some(n=>n.type==='ot-ingest'));
+    const install = await fetch(base+'/nodes', {method:'POST', headers:{
+      Authorization:`Bearer ${token}`, 'Content-Type':'application/json'},
+      body:JSON.stringify({module:'ot-runtime-install-must-remain-disabled'})});
+    assert(install.status >= 400, 'runtime module installation must remain disabled for administrators');
     publisher=mqtt.connect({host:'127.0.0.1',port:tcp.address().port});await once(publisher,'connect');
     await publisher.publishAsync('lab/raspi1/temperature',JSON.stringify({device:'raspi1',unit:'C',value:25,ts:1760000000}),{qos:1});
     for(let i=0;i<80 && writes===0;i++)await delay(100);
     assert.equal(writes,1);assert.equal((await fetch(base+'/ot-health')).status,200);
-    console.log('PASS: Node-RED runtime loads versioned flow, enforces admin login and persists MQTT input');
+    console.log('PASS: Node-RED loads the flow, enforces login, denies runtime installation and persists MQTT input');
   } catch(error){console.error(logs);throw error;}
   finally{if(publisher)await publisher.endAsync(true);child.kill();await once(child,'exit').catch(()=>{});await new Promise(r=>broker.close(r));tcp.close();db.close();fs.rmSync(dir,{recursive:true,force:true});}
 })().catch(error=>{console.error(error);process.exitCode=1;});

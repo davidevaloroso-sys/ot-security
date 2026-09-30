@@ -1,0 +1,8 @@
+{
+  "name": "@ot-security/disabled-npm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Explicitly denies package-manager execution in the immutable OT Node-RED runtime",
+  "main": "bin/npm-cli.js",
+  "license": "UNLICENSED"
+}

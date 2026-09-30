@@ -2,6 +2,18 @@
 
 ## Stato della release
 
+### Blocco npm rilevato e corretto il 30 settembre
+
+Il commit `c552cb0` è stato pubblicato direttamente su main con diagnostica del preflight, client kubectl compatibile e procedura MQTT. La [CI 36657062263](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36657062263) si è fermata in `Validate locked Node-RED runtime`: `undici 6.28.0` incluso in `npm 11.19.1` risulta HIGH; build, publish e deploy saltati. I precedenti override non sostituivano i package incorporati. Le release npm 11.20.0/12.1.0 verificate contengono ancora i bundle vulnerabili.
+
+Il runtime del prodotto aveva già palette, upload e auto-install disabilitati. La correzione elimina completamente il gestore npm incorporato e i suoi 143 package bundled: 144 voci rimosse dal lockfile, nessuna riscrittura delle versioni installate o esclusione CVE. Un pacchetto locale esplicito `@ot-security/disabled-npm` permette soltanto la risoluzione del percorso `npm/package.json` richiesta da Node-RED all'avvio; ogni comando, incluse le richieste di versione, termina con errore senza echo di argomenti o variabili. npm reale rimane uno strumento di build, rimosso dall'immagine finale come prima. Due dipendenze di soli tipi TypeScript hanno ricevuto patch durante la rigenerazione del lockfile.
+
+Verificati installazione pulita con `npm ci`, audit con zero vulnerabilità e smoke Node-RED reale: avvio flusso versionato, login amministrativo, scrittura MQTT e rifiuto dell'installazione di moduli anche con autenticazione amministrativa. L'immagine Docker corretta è stata costruita localmente. Il gate HIGH/CRITICAL della pipeline resta invariato.
+
+La prima build usava un symlink per il pacchetto locale: Trivy ricostruiva ancora i vecchi package npm dello strato di base, sebbene quei file fossero assenti nel filesystem effettivo del container (digest confrontati). Abilitato `install-links=true` nel progetto runtime e rigenerato il lockfile, così l'adattatore viene installato come directory reale anche in CI e nell'immagine. Ripetuti installazione pulita, audit e smoke con esito positivo. Trivy 0.74.0 con database aggiornato del 30 settembre sull'immagine `sha256:f8ca1ed76958054b44b4aad2a44ce46b5eb8e5bddc2524e9a1dd5b4a60af64f6`: **zero HIGH/CRITICAL e zero segreti rilevati**, exit 0. Report locale in `test-results/nodered-no-installer-security.json`.
+
+Creato e verificato il report nella [conversazione cloud «Report — 30 settembre 2026»](https://chatgpt.com/c/6abc6b51-6920-83eb-b695-db0133a2b4cc), dentro il progetto OT-Security; viene aggiornato con gli esiti verificati, senza dichiarare un deploy non avvenuto.
+
 ### Ripresa del 30 settembre: preparazione MQTT
 
 Il proprietario ha verificato Mosquitto attivo come servizio sulla VM, con autenticazione sulla sola porta 1883; nessun container Docker attivo. La configurazione rilevata usa `/etc/mosquitto/conf.d/ot.conf` e `/etc/mosquitto/passwd`. Il nuovo deploy richiede il listener TLS 8883: creare i Secret senza configurare il broker non sarebbe sufficiente.

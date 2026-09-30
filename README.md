@@ -8,6 +8,8 @@ Le immagini candidate e l'inventario SPDX firmato della base Grafana non riporta
 
 Pipeline di laboratorio su K3s: telemetria autenticata, validazione, inferenza e dashboard provisionata dal codice. API K3s (`6443`) e broker MQTT (`8883`) sono sulla VM **192.168.1.21**. Il DDNS **k3s--lab.cloud-ip.cc:51820/UDP** individua l'endpoint pubblico WireGuard; attraverso il tunnel il runner interroga direttamente **https://192.168.1.21:6443**.
 
+Il successivo [run 36657062263](https://github.com/davidevaloroso-sys/ot-security/actions/runs/36657062263) si è fermato prima delle build per un avviso HIGH su `undici` nell'npm incorporato da Node-RED. Il runtime ora rimuove quel gestore, già disabilitato dalle impostazioni, e include un adattatore locale che rifiuta ogni invocazione. L'audit del nuovo lockfile riporta zero vulnerabilità e lo smoke Node-RED reale verifica login, flusso MQTT e rifiuto dell'installazione anche per l'amministratore. Nessun controllo di sicurezza è stato disabilitato; il prossimo esito CI resta da verificare.
+
 ```text
 Simulatore ── MQTT TLS/QoS1 ── broker esterno :8883
                                 ├─ audit Python (metadati)
@@ -36,6 +38,8 @@ Il laboratorio rileva anomalie su singole letture simulate. Non controlla attuat
 | `scripts/` | Bootstrap, token limitati, preflight, renderer e collaudo Docker completo |
 
 Grafana visualizza temperatura, umidità, conteggio degli allarmi nell'intervallo scelto, timestamp dell'ultima lettura per sensore e tabella eventi. Nessun dato non equivale a un sensore sano. Flussi e dashboard sono gestiti dal repository: le modifiche passano da revisione, test e rilascio. L'editor Node-RED richiede login e il runtime è in modalità `readOnly`.
+
+Il runtime Node-RED non contiene il gestore npm incorporato: l'override nel lockfile usa il pacchetto locale [disabled-npm](platform/nodered/runtime/disabled-npm/README.md), identificato con il proprio nome e senza dipendenze. Questo conserva la risoluzione dei percorsi richiesta all'avvio da Node-RED e rifiuta qualsiasi comando. L'aggiunta di nodi richiede una nuova build; gli strumenti di build continuano a usare npm reale. Il Dockerfile copia anche l'adattatore e rimuove npm globale dall'immagine finale.
 
 ## Contratto e consegna
 

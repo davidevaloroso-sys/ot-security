@@ -1,6 +1,8 @@
 FROM nodered/node-red:5.0.7@sha256:a649dd711d55490151a2c39a8e48ad0c44325488fbc0e66315f2d2e19e5e1ace
 USER root
 COPY platform/nodered/runtime/package*.json /usr/src/node-red/
+COPY platform/nodered/runtime/.npmrc /usr/src/node-red/.npmrc
+COPY platform/nodered/runtime/disabled-npm /usr/src/node-red/disabled-npm
 RUN apk upgrade --no-cache \
     && npm ci --prefix /usr/src/node-red --omit=dev --ignore-scripts --no-audit --no-fund
 WORKDIR /opt/ot-node
