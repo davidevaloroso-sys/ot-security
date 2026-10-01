@@ -98,7 +98,7 @@ Il test usa un broker reale, un IP loopback con certificato dedicato e risorse K
 3. Creare `mqtt-ca` con la CA del broker effettivamente verificata, chiave `ca.crt`. Non usare la CA K3s al suo posto.
 4. Verificare l'InfluxDB esistente tramite port-forward localhost. Usare le credenziali amministrative già conservate per emettere un token write per Node-RED e uno read per Grafana, limitati al bucket reale. Un valore casuale non è un token autorizzato da InfluxDB. Se esistono già file con token validi, riutilizzarli; lo script di provisioning crea nuovi token per entrambi i ruoli e rifiuta di sovrascrivere i file.
 5. Completare `nodered-auth` con login, hash bcrypt, chiave di cifratura stabile e token write. Valutare la chiave di cifratura Node-RED esistente prima di cambiarla: una nuova chiave non decifra credenziali salvate con la precedente. Creare `grafana-influxdb` con `INFLUXDB_READ_TOKEN`.
-6. Eseguire il preflight e solo dopo il dry-run, rollout e collaudo. La procedura completa e le chiavi sono nel [README](../README.md#bootstrap-e-rilascio-k3s--da-eseguire-nel-collaudo-della-vm).
+6. Eseguire il preflight e solo dopo il dry-run, rollout e collaudo. La procedura completa e le chiavi sono nel [guida operativa](OPERATIONS.md#bootstrap-e-rilascio-k3s--da-eseguire-nel-collaudo-della-vm).
 
 Per creare il Secret Grafana **solo quando il file protetto contiene un token valido**:
 
