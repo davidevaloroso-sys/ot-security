@@ -30,10 +30,11 @@ Il simulatore pubblica su `lab/raspi1/temperature` e `lab/raspi1/humidity`. L'IA
 
 `Push main → test e training → sei build → scansioni e integrazione → GHCR → deploy K3s → collaudo`
 
-Il runner entra via WireGuard: `k3s--lab.cloud-ip.cc:51820/UDP`. Nel tunnel raggiunge l'API `192.168.1.21:6443`; il broker MQTT è sulla stessa VM, porta `8883`. Il deploy verifica servizi, query Grafana e telemetria recente.
+Il runner entra via WireGuard e raggiunge l'API privata K3s. Il broker MQTT usa TLS sulla stessa VM. Il deploy verifica servizi, query Grafana e telemetria recente.
 
 ## Documentazione
 
+- [Verifica pipeline del 5 ottobre 2026](docs/REPORT-2026-10-05.md)
 - [Guida tecnica, comandi e test](docs/OPERATIONS.md)
 - [Credenziali e preparazione del broker](docs/K3S-SECRETS.md) · [VPN e TLS](docs/K3S-TLS.md)
 - [Report del deploy e limiti verificati](docs/DEPLOYMENT-2026-09-30.md) · [Checklist del laboratorio](docs/K3S-COLLAUDO.md)
