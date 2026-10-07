@@ -1,11 +1,22 @@
 version: 2
+# Dependabot secrets are separate from GitHub Actions secrets.
+registries:
+  docker-hardened-images:
+    type: docker-registry
+    url: https://dhi.io
+    username: ${{secrets.DOCKERHUB_USERNAME}}
+    password: ${{secrets.DOCKERHUB_TOKEN}}
 updates:
   - package-ecosystem: "docker"
     directory: "/platform/influxdb"
+    registries:
+      - docker-hardened-images
     schedule:
       interval: weekly
   - package-ecosystem: "docker"
     directory: "/platform/grafana"
+    registries:
+      - docker-hardened-images
     schedule:
       interval: weekly
   - package-ecosystem: "npm"
