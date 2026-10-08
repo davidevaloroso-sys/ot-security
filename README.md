@@ -34,7 +34,7 @@ Il runner entra via WireGuard e raggiunge l'API privata K3s. Il broker MQTT usa 
 
 ## Documentazione
 
-- [Verifica pipeline e Dependabot del 7 ottobre 2026](docs/REPORT-2026-10-07.md)
+- [Verifica pipeline e Dependabot dell'8 ottobre 2026](docs/REPORT-2026-10-08.md)
 - [Guida tecnica, comandi e test](docs/OPERATIONS.md)
 - [Credenziali e preparazione del broker](docs/K3S-SECRETS.md) · [VPN e TLS](docs/K3S-TLS.md)
 - [Report del deploy e limiti verificati](docs/DEPLOYMENT-2026-09-30.md) · [Checklist del laboratorio](docs/K3S-COLLAUDO.md)
