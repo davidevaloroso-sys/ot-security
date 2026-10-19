@@ -6,7 +6,7 @@
   "engines": {"node": ">=22"},
   "node-red": {"nodes": {"ot-ingest": "ot-ingest.js"}},
   "scripts": {"test": "node --test test/*.test.js"},
-  "dependencies": {"mqtt": "5.16.0"},
+  "dependencies": {"mqtt": "5.16.1"},
   "devDependencies": {"aedes": "0.51.3"},
   "overrides": {"uuid": "11.1.1"}
 }
