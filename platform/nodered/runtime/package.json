@@ -2,6 +2,18 @@
   "name": "ot-security-nodered-runtime",
   "version": "1.0.0",
   "private": true,
-  "dependencies": {"node-red": "5.0.7", "npm": "file:./disabled-npm"},
-  "overrides": {"qs": "6.16.0", "ip-address": "10.7.2", "multer": "2.4.0", "undici": "6.28.1", "axios": "1.20.0", "moment": "2.31.0", "npm": "$npm"}
+  "dependencies": {
+    "node-red": "5.0.7",
+    "npm": "file:./disabled-npm"
+  },
+  "overrides": {
+    "qs": "6.16.0",
+    "ip-address": "10.7.5",
+    "multer": "2.5.0",
+    "undici": "6.28.1",
+    "axios": "1.20.0",
+    "moment": "2.31.0",
+    "npm": "$npm",
+    "body-parser": "1.20.9"
+  }
 }
