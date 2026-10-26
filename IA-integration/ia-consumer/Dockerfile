@@ -1,4 +1,4 @@
-FROM python:3.11-alpine@sha256:cd04730b8511def3fbf14204d66a0c1536f290b8e896ed5a94cd64cb15ac1356 AS dependencies
+FROM python:3.15-alpine@sha256:d44b1254cb92329418d164b22b20d86bbd3869d48e80e09e476531a409a728bb AS dependencies
 WORKDIR /build
 COPY IA-integration/ia-consumer/requirements.txt ./requirements.txt
 # scikit-learn 1.6.1 has no musllinux wheel. Build the pinned version with
@@ -10,7 +10,7 @@ RUN apk add --no-cache build-base \
         --config-settings=compile-args=-j2 \
         -c requirements.txt -r requirements.txt scikit-learn
 
-FROM python:3.11-alpine@sha256:cd04730b8511def3fbf14204d66a0c1536f290b8e896ed5a94cd64cb15ac1356
+FROM python:3.15-alpine@sha256:d44b1254cb92329418d164b22b20d86bbd3869d48e80e09e476531a409a728bb
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY --from=dependencies /install /usr/local
