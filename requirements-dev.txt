@@ -1,5 +1,5 @@
 -r requirements.txt
 -r IA-integration/ia-consumer/requirements.txt
-pytest==8.3.5
+pytest==9.1.1
 PyYAML==6.0.2
 bandit==1.8.3
