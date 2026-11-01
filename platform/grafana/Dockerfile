@@ -1,8 +1,8 @@
 FROM python:3.11-alpine@sha256:cd04730b8511def3fbf14204d66a0c1536f290b8e896ed5a94cd64cb15ac1356 AS plugin
 WORKDIR /plugin
 # Official signed InfluxDB plugin, pinned to Grafana's published archive SHA256.
-RUN wget -q 'https://grafana.com/api/plugins/influxdb/versions/13.1.6/download?os=linux&arch=amd64' -O influxdb.zip \
-    && echo 'ebf559b2a3d2375efe7959568a132c16ebe1fe7c55bfaf2ce7643693d6b0bceb  influxdb.zip' | sha256sum -c - \
+RUN wget -q 'https://grafana.com/api/plugins/influxdb/versions/13.1.10/download?os=linux&arch=amd64' -O influxdb.zip \
+    && echo '01f73b902e3d5d2e061a214f60492dc4fe8b29a35648353e07eb55372a081769  influxdb.zip' | sha256sum -c - \
     && unzip -q influxdb.zip \
     && chmod 755 influxdb/gpx_grafana_influxdb_datasource_linux_amd64
 
