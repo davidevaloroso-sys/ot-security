@@ -1,4 +1,4 @@
-FROM nodered/node-red:5.0.7@sha256:a649dd711d55490151a2c39a8e48ad0c44325488fbc0e66315f2d2e19e5e1ace
+FROM nodered/node-red:5.0.10-24@sha256:3622786c15b6f57f61bf1d0ece59d06a18b742c5c8955f588d189b6bee8dc97d
 USER root
 COPY platform/nodered/runtime/package*.json /usr/src/node-red/
 COPY platform/nodered/runtime/.npmrc /usr/src/node-red/.npmrc
